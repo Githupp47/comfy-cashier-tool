@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag, Settings, Image } from "lucide-react";
+import { ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag, Settings, Image, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -24,6 +24,7 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [orderCount, setOrderCount] = useState<number | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -38,6 +39,26 @@ export default function Admin() {
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Sound notification for new orders via realtime
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("admin-new-orders")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders" },
+        () => {
+          const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp2XjHhjaGJ3ipeanJeIc2Bla3yLmJqVh3JfZGt8jJiZlIZwXmVsfY6ZmpWHcF5la32NmJmUhnBeZWx9jpiZlIZwXmRsfI6YmZSGcF5la32OmJmUhnBeZGx8jpiZlYdxX2VsfY6YmZSGcF5lbH2OmJmUhnBeZWt9jpiZlIZwXmVrfY6YmpWHcV9lbH2OmJmVh3FfZWx9jpiZlIZwXmVsfY6YmZSGcF5la32OmJmUhnBeZWx9jpiZlIZwXmVrfY6YmpWHcV9lbH2OmJmUh3FfZWx9jpiZlIZwXmVrfY+YmpWHcV9la32OmJqVh3FfZWx9jpiZlIdxX2VsfY6YmZWHcV9lbH2OmJmUhnBeZWx9jpiZlIZwXmVsfY6YmpWHcV9la32OmJmVh3FfZWx9jpiZlIZw");
+          audio.volume = 0.7;
+          audio.play().catch(() => {});
+          toast.success("🔔 มีออเดอร์ใหม่เข้ามา!", { duration: 5000 });
+          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session, queryClient]);
 
   const { data: products } = useQuery({
     queryKey: ["admin-products"],
