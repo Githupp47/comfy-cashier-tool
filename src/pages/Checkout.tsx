@@ -102,7 +102,7 @@ export default function Checkout() {
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 py-20 text-center space-y-4">
-          <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+          <CheckCircle className="h-16 w-16 text-primary mx-auto" />
           <h2 className="text-2xl font-bold text-foreground">สั่งซื้อสำเร็จ!</h2>
           <p className="text-muted-foreground">ร้านจะตรวจสอบสลิปและติดต่อกลับทางเบอร์โทรที่ให้ไว้</p>
           <Button onClick={() => navigate("/")} className="bg-primary text-primary-foreground">

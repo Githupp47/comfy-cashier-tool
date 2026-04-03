@@ -321,7 +321,7 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
               </div>
             </div>
             {o.dormitory_map_link && (
-              <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
+              <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
                 📍 ดูที่อยู่หอพัก
               </a>
             )}
