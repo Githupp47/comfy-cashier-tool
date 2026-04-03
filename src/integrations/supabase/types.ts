@@ -14,7 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          price: number
+          product_id: string
+          product_name: string
+          quantity: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          price?: number
+          product_id: string
+          product_name: string
+          quantity?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          price?: number
+          product_id?: string
+          product_name?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string
+          customer_name: string
+          customer_phone: string
+          dormitory_map_link: string | null
+          id: string
+          note: string | null
+          slip_url: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name: string
+          customer_phone: string
+          dormitory_map_link?: string | null
+          id?: string
+          note?: string | null
+          slip_url?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          customer_phone?: string
+          dormitory_map_link?: string | null
+          id?: string
+          note?: string | null
+          slip_url?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          is_available: boolean
+          name: string
+          price: number
+          rice_variety: string | null
+          sort_order: number
+          updated_at: string
+          weight: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name: string
+          price?: number
+          rice_variety?: string | null
+          sort_order?: number
+          updated_at?: string
+          weight?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name?: string
+          price?: number
+          rice_variety?: string | null
+          sort_order?: number
+          updated_at?: string
+          weight?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
