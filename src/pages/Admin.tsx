@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,9 +12,15 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag, Settings, Image, Bell } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import {
+  ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag,
+  Settings, Image, Bell, BellRing, TrendingUp, Clock, CheckCircle2,
+  MapPin, MessageSquare, Eye, EyeOff, Volume2, VolumeX, Store
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import brandLogo from "@/assets/brand-logo.png";
 
 type Product = Tables<"products">;
 type Order = Tables<"orders">;
@@ -24,7 +30,13 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [orderCount, setOrderCount] = useState<number | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/notification.wav");
+    audioRef.current.volume = 0.8;
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -40,7 +52,7 @@ export default function Admin() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Sound notification for new orders via realtime
+  // Realtime notification for new orders
   useEffect(() => {
     if (!session) return;
     const channel = supabase
@@ -49,16 +61,21 @@ export default function Admin() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders" },
         () => {
-          const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp2XjHhjaGJ3ipeanJeIc2Bla3yLmJqVh3JfZGt8jJiZlIZwXmVsfY6ZmpWHcF5la32NmJmUhnBeZWx9jpiZlIZwXmRsfI6YmZSGcF5la32OmJmUhnBeZGx8jpiZlYdxX2VsfY6YmZSGcF5lbH2OmJmUhnBeZWt9jpiZlIZwXmVrfY6YmpWHcV9lbH2OmJmVh3FfZWx9jpiZlIZwXmVsfY6YmZSGcF5la32OmJmUhnBeZWx9jpiZlIZwXmVrfY6YmpWHcV9lbH2OmJmUh3FfZWx9jpiZlIZwXmVrfY+YmpWHcV9la32OmJqVh3FfZWx9jpiZlIdxX2VsfY6YmZWHcV9lbH2OmJmUhnBeZWx9jpiZlIZwXmVsfY6YmpWHcV9la32OmJmVh3FfZWx9jpiZlIZw");
-          audio.volume = 0.7;
-          audio.play().catch(() => {});
-          toast.success("🔔 มีออเดอร์ใหม่เข้ามา!", { duration: 5000 });
+          if (soundEnabled && audioRef.current) {
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(() => {});
+          }
+          toast("🔔 ออเดอร์ใหม่เข้ามาแล้ว!", {
+            description: "กดที่แท็บออเดอร์เพื่อตรวจสอบ",
+            duration: 8000,
+            action: { label: "ดูเลย", onClick: () => {} },
+          });
           queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
         }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [session, queryClient]);
+  }, [session, queryClient, soundEnabled]);
 
   const { data: products } = useQuery({
     queryKey: ["admin-products"],
@@ -87,7 +104,7 @@ export default function Admin() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="animate-spin h-10 w-10 border-4 border-primary border-t-transparent rounded-full" />
     </div>
   );
   if (!session) return null;
@@ -97,111 +114,131 @@ export default function Admin() {
     const today = new Date().toDateString();
     return new Date(o.created_at).toDateString() === today;
   }).length ?? 0;
+  const completedOrders = orders?.filter(o => o.status === "completed").length ?? 0;
   const totalRevenue = orders?.filter(o => o.status !== "cancelled").reduce((sum, o) => sum + Number(o.total_amount), 0) ?? 0;
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      {/* Header */}
-      <header className="border-b border-border bg-card shadow-sm">
+    <div className="min-h-screen bg-background">
+      {/* Premium Header */}
+      <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-md">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-full">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-full hover:bg-muted">
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <img src={brandLogo} alt="HAKKŌ" className="h-10 w-10 rounded-lg object-cover" />
             <div>
-              <h1 className="text-lg font-bold text-foreground">แดชบอร์ดแอดมิน</h1>
-              <p className="text-xs text-muted-foreground">จัดการร้านข้าวไอติม & เชื้อโคจิ</p>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">HAKKŌ Admin</h1>
+              <p className="text-xs text-muted-foreground">ระบบจัดการร้าน</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="rounded-full gap-2">
-            <LogOut className="h-4 w-4" /> ออกจากระบบ
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full relative"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              title={soundEnabled ? "ปิดเสียงแจ้งเตือน" : "เปิดเสียงแจ้งเตือน"}
+            >
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
+            </Button>
+            {pendingOrders > 0 && (
+              <div className="relative">
+                <BellRing className="h-5 w-5 text-primary animate-pulse" />
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1">
+                  {pendingOrders}
+                </span>
+              </div>
+            )}
+            <Button variant="outline" size="sm" onClick={handleLogout} className="rounded-full gap-2 ml-2">
+              <LogOut className="h-4 w-4" /> ออก
+            </Button>
+          </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-6 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-border">
-            <CardContent className="pt-4 pb-4 px-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
+      <div className="container mx-auto px-4 py-6 space-y-6 max-w-5xl">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="bg-card border-border hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-2 rounded-xl bg-primary/10">
                   <Package className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{products?.length ?? 0}</p>
-                  <p className="text-xs text-muted-foreground">สินค้าทั้งหมด</p>
-                </div>
+                <span className="text-xs text-muted-foreground font-medium">สินค้า</span>
               </div>
+              <p className="text-3xl font-bold text-foreground">{products?.length ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">รายการทั้งหมด</p>
             </CardContent>
           </Card>
-          <Card className="border-border">
-            <CardContent className="pt-4 pb-4 px-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-orange-100">
-                  <ShoppingBag className="h-5 w-5 text-orange-600" />
+
+          <Card className="bg-card border-border hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-2 rounded-xl bg-accent">
+                  <Clock className="h-5 w-5 text-accent-foreground" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{pendingOrders}</p>
-                  <p className="text-xs text-muted-foreground">รอตรวจสอบ</p>
-                </div>
+                <span className="text-xs text-muted-foreground font-medium">รอดำเนินการ</span>
               </div>
+              <p className="text-3xl font-bold text-foreground">{pendingOrders}</p>
+              <p className="text-xs text-muted-foreground mt-1">ออเดอร์รอตรวจ</p>
             </CardContent>
           </Card>
-          <Card className="border-border">
-            <CardContent className="pt-4 pb-4 px-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-100">
-                  <ShoppingBag className="h-5 w-5 text-green-600" />
+
+          <Card className="bg-card border-border hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <ShoppingBag className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{todayOrders}</p>
-                  <p className="text-xs text-muted-foreground">ออเดอร์วันนี้</p>
-                </div>
+                <span className="text-xs text-muted-foreground font-medium">วันนี้</span>
               </div>
+              <p className="text-3xl font-bold text-foreground">{todayOrders}</p>
+              <p className="text-xs text-muted-foreground mt-1">ออเดอร์วันนี้</p>
             </CardContent>
           </Card>
-          <Card className="border-border">
-            <CardContent className="pt-4 pb-4 px-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100">
-                  <Package className="h-5 w-5 text-blue-600" />
+
+          <Card className="bg-card border-border hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <TrendingUp className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-primary">฿{totalRevenue.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">ยอดรวม</p>
-                </div>
+                <span className="text-xs text-muted-foreground font-medium">รายได้</span>
               </div>
+              <p className="text-2xl font-bold text-primary">฿{totalRevenue.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">ยอดรวมทั้งหมด</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="products">
-          <TabsList className="bg-card border border-border">
-            <TabsTrigger value="products" className="gap-1.5">
-              <Package className="h-4 w-4" /> สินค้า
-            </TabsTrigger>
-            <TabsTrigger value="orders" className="gap-1.5">
+        <Tabs defaultValue="orders" className="space-y-6">
+          <TabsList className="bg-card border border-border p-1 h-auto rounded-xl">
+            <TabsTrigger value="orders" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <ShoppingBag className="h-4 w-4" /> ออเดอร์
               {pendingOrders > 0 && (
-                <Badge variant="destructive" className="h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-xs ml-1">
+                <Badge variant="destructive" className="h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
                   {pendingOrders}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="settings" className="gap-1.5">
+            <TabsTrigger value="products" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
+              <Package className="h-4 w-4" /> สินค้า
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Settings className="h-4 w-4" /> ตั้งค่า
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="products" className="mt-6">
-            <ProductsManager products={products ?? []} queryClient={queryClient} />
-          </TabsContent>
-          <TabsContent value="orders" className="mt-6">
+          <TabsContent value="orders">
             <OrdersManager orders={orders ?? []} queryClient={queryClient} />
           </TabsContent>
-          <TabsContent value="settings" className="mt-6">
+          <TabsContent value="products">
+            <ProductsManager products={products ?? []} queryClient={queryClient} />
+          </TabsContent>
+          <TabsContent value="settings">
             <ShopSettings />
           </TabsContent>
         </Tabs>
@@ -210,6 +247,7 @@ export default function Admin() {
   );
 }
 
+/* ===================== PRODUCTS ===================== */
 function ProductsManager({ products, queryClient }: { products: Product[]; queryClient: any }) {
   const [editProduct, setEditProduct] = useState<Partial<Product> | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -273,18 +311,21 @@ function ProductsManager({ products, queryClient }: { products: Product[]; query
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">รายการสินค้า ({products.length})</h2>
-        <Button onClick={openNew} className="bg-primary text-primary-foreground rounded-full gap-1.5">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">📦 จัดการสินค้า</h2>
+          <p className="text-sm text-muted-foreground">{products.length} รายการ</p>
+        </div>
+        <Button onClick={openNew} className="bg-primary text-primary-foreground rounded-xl gap-2 shadow-sm">
           <Plus className="h-4 w-4" /> เพิ่มสินค้า
         </Button>
       </div>
 
       <div className="grid gap-3">
         {products.map((p) => (
-          <Card key={p.id} className="border-border overflow-hidden">
+          <Card key={p.id} className="border-border overflow-hidden hover:shadow-md transition-all group">
             <CardContent className="p-0">
               <div className="flex items-center gap-4 p-4">
-                <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0 border border-border">
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0 border border-border shadow-sm">
                   {p.image_url ? (
                     <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
                   ) : (
@@ -295,53 +336,62 @@ function ProductsManager({ products, queryClient }: { products: Product[]; query
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium text-foreground truncate">{p.name}</p>
-                    <Badge variant={p.is_available ? "default" : "secondary"} className="text-xs shrink-0">
-                      {p.is_available ? "พร้อมขาย" : "ปิดขาย"}
+                    <p className="font-semibold text-foreground truncate">{p.name}</p>
+                    <Badge variant={p.is_available ? "default" : "secondary"} className="text-[10px] shrink-0">
+                      {p.is_available ? "✓ พร้อมขาย" : "ปิดขาย"}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    {p.category === "ice_cream" ? "🍦 ไอติม" : "🍚 โคจิ"} • {p.rice_variety ?? ""} • <span className="text-primary font-semibold">฿{p.price}</span>
+                    {p.category === "ice_cream" ? "🍦 ไอติม" : "🍚 โคจิ"} {p.rice_variety ? `• ${p.rice_variety}` : ""} {p.weight ? `• ${p.weight}` : ""}
                   </p>
+                  <p className="text-primary font-bold mt-0.5">฿{p.price}</p>
                 </div>
-                <div className="flex gap-1.5">
-                  <Button size="icon" variant="outline" className="rounded-full h-9 w-9" onClick={() => openEdit(p)}>
-                    <Pencil className="h-4 w-4" />
+                <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                  <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => openEdit(p)}>
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="icon" variant="outline" className="rounded-full h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => { if (confirm("ลบสินค้านี้?")) deleteMutation.mutate(p.id); }}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button size="icon" variant="outline" className="rounded-xl h-9 w-9 text-destructive hover:bg-destructive/10 hover:border-destructive" onClick={() => { if (confirm("ลบสินค้านี้?")) deleteMutation.mutate(p.id); }}>
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
         ))}
+        {products.length === 0 && (
+          <div className="text-center py-16 text-muted-foreground">
+            <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>ยังไม่มีสินค้า</p>
+            <Button variant="outline" className="mt-3 rounded-xl" onClick={openNew}>เพิ่มสินค้าแรก</Button>
+          </div>
+        )}
       </div>
 
+      {/* Product Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{editProduct?.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}</DialogTitle>
+            <DialogTitle className="text-lg">{editProduct?.id ? "✏️ แก้ไขสินค้า" : "➕ เพิ่มสินค้าใหม่"}</DialogTitle>
           </DialogHeader>
           {editProduct && (
-            <div className="space-y-4">
+            <div className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Label>ชื่อสินค้า</Label>
-                <Input value={editProduct.name ?? ""} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
+                <Label className="text-sm font-medium">ชื่อสินค้า</Label>
+                <Input className="rounded-xl" value={editProduct.name ?? ""} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>คำอธิบาย</Label>
-                <Textarea value={editProduct.description ?? ""} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} />
+                <Label className="text-sm font-medium">คำอธิบาย</Label>
+                <Textarea className="rounded-xl" value={editProduct.description ?? ""} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>ราคา (฿)</Label>
-                  <Input type="number" value={editProduct.price ?? 0} onChange={(e) => setEditProduct({ ...editProduct, price: Number(e.target.value) })} />
+                  <Label className="text-sm font-medium">ราคา (฿)</Label>
+                  <Input className="rounded-xl" type="number" value={editProduct.price ?? 0} onChange={(e) => setEditProduct({ ...editProduct, price: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>หมวดหมู่</Label>
+                  <Label className="text-sm font-medium">หมวดหมู่</Label>
                   <Select value={editProduct.category ?? "ice_cream"} onValueChange={(v) => setEditProduct({ ...editProduct, category: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ice_cream">🍦 ไอติมข้าว</SelectItem>
                       <SelectItem value="koji">🍚 เชื้อโคจิ</SelectItem>
@@ -349,33 +399,33 @@ function ProductsManager({ products, queryClient }: { products: Product[]; query
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>สายพันธุ์ข้าว</Label>
-                  <Input value={editProduct.rice_variety ?? ""} onChange={(e) => setEditProduct({ ...editProduct, rice_variety: e.target.value })} />
+                  <Label className="text-sm font-medium">สายพันธุ์ข้าว</Label>
+                  <Input className="rounded-xl" value={editProduct.rice_variety ?? ""} onChange={(e) => setEditProduct({ ...editProduct, rice_variety: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>น้ำหนัก</Label>
-                  <Input value={editProduct.weight ?? ""} onChange={(e) => setEditProduct({ ...editProduct, weight: e.target.value })} placeholder="เช่น 500g" />
+                  <Label className="text-sm font-medium">น้ำหนัก</Label>
+                  <Input className="rounded-xl" value={editProduct.weight ?? ""} onChange={(e) => setEditProduct({ ...editProduct, weight: e.target.value })} placeholder="เช่น 500g" />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>ลำดับการแสดง</Label>
-                <Input type="number" value={editProduct.sort_order ?? 0} onChange={(e) => setEditProduct({ ...editProduct, sort_order: Number(e.target.value) })} />
+                <Label className="text-sm font-medium">ลำดับการแสดง</Label>
+                <Input className="rounded-xl" type="number" value={editProduct.sort_order ?? 0} onChange={(e) => setEditProduct({ ...editProduct, sort_order: Number(e.target.value) })} />
               </div>
               <div className="space-y-2">
-                <Label>รูปสินค้า</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
+                <Label className="text-sm font-medium">รูปสินค้า</Label>
+                <Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
                 {editProduct.image_url && !imageFile && (
-                  <img src={editProduct.image_url} alt="" className="h-20 rounded-md object-cover" />
+                  <img src={editProduct.image_url} alt="" className="h-20 rounded-xl object-cover border border-border" />
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 bg-muted/50 rounded-xl p-3">
                 <Switch checked={editProduct.is_available ?? true} onCheckedChange={(v) => setEditProduct({ ...editProduct, is_available: v })} />
-                <Label>พร้อมขาย</Label>
+                <Label className="text-sm">สินค้าพร้อมขาย</Label>
               </div>
               <Button
-                className="w-full bg-primary text-primary-foreground"
+                className="w-full bg-primary text-primary-foreground rounded-xl h-11 text-base"
                 onClick={() => saveMutation.mutate(editProduct)}
                 disabled={saveMutation.isPending}
               >
@@ -389,8 +439,10 @@ function ProductsManager({ products, queryClient }: { products: Product[]; query
   );
 }
 
+/* ===================== ORDERS ===================== */
 function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: any }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
   const { data: orderItems } = useQuery({
     queryKey: ["order-items", selectedOrder?.id],
@@ -413,84 +465,144 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
     },
   });
 
-  const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-    pending: { label: "⏳ รอตรวจสอบ", variant: "outline" },
-    confirmed: { label: "✅ ยืนยันแล้ว", variant: "default" },
-    preparing: { label: "👨‍🍳 กำลังเตรียม", variant: "secondary" },
-    delivering: { label: "🚗 กำลังจัดส่ง", variant: "secondary" },
-    completed: { label: "✅ เสร็จสิ้น", variant: "default" },
-    cancelled: { label: "❌ ยกเลิก", variant: "destructive" },
+  const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+    pending: { label: "รอตรวจสอบ", color: "bg-amber-100 text-amber-800 border-amber-200", icon: <Clock className="h-3 w-3" /> },
+    confirmed: { label: "ยืนยันแล้ว", color: "bg-blue-100 text-blue-800 border-blue-200", icon: <CheckCircle2 className="h-3 w-3" /> },
+    preparing: { label: "กำลังเตรียม", color: "bg-purple-100 text-purple-800 border-purple-200", icon: <Package className="h-3 w-3" /> },
+    delivering: { label: "กำลังจัดส่ง", color: "bg-cyan-100 text-cyan-800 border-cyan-200", icon: <MapPin className="h-3 w-3" /> },
+    completed: { label: "เสร็จสิ้น", color: "bg-emerald-100 text-emerald-800 border-emerald-200", icon: <CheckCircle2 className="h-3 w-3" /> },
+    cancelled: { label: "ยกเลิก", color: "bg-red-100 text-red-800 border-red-200", icon: <Trash2 className="h-3 w-3" /> },
   };
+
+  const filteredOrders = filterStatus === "all" ? orders : orders.filter(o => o.status === filterStatus);
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-foreground">ออเดอร์ ({orders.length})</h2>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">🛒 จัดการออเดอร์</h2>
+          <p className="text-sm text-muted-foreground">{orders.length} ออเดอร์ทั้งหมด</p>
+        </div>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[160px] rounded-xl">
+            <SelectValue placeholder="กรองสถานะ" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">ทั้งหมด</SelectItem>
+            <SelectItem value="pending">⏳ รอตรวจสอบ</SelectItem>
+            <SelectItem value="confirmed">✅ ยืนยันแล้ว</SelectItem>
+            <SelectItem value="preparing">👨‍🍳 กำลังเตรียม</SelectItem>
+            <SelectItem value="delivering">🚗 กำลังจัดส่ง</SelectItem>
+            <SelectItem value="completed">✅ เสร็จสิ้น</SelectItem>
+            <SelectItem value="cancelled">❌ ยกเลิก</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid gap-3">
-        {orders.map((o) => (
-          <Card key={o.id} className="border-border">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-foreground">{o.customer_name}</p>
-                  <p className="text-sm text-muted-foreground">{o.customer_phone}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{new Date(o.created_at).toLocaleString("th-TH")}</p>
-                </div>
-                <div className="text-right space-y-1">
-                  <p className="text-lg font-bold text-primary">฿{o.total_amount}</p>
-                  <Badge variant={statusConfig[o.status]?.variant ?? "outline"}>
-                    {statusConfig[o.status]?.label ?? o.status}
-                  </Badge>
-                </div>
-              </div>
+        {filteredOrders.map((o) => {
+          const sc = statusConfig[o.status];
+          return (
+            <Card key={o.id} className={`border-border overflow-hidden transition-all ${o.status === "pending" ? "ring-2 ring-primary/20 border-primary/30" : ""}`}>
+              <CardContent className="p-0">
+                <div className="p-4 space-y-3">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="font-bold text-foreground text-base">{o.customer_name}</p>
+                      <p className="text-sm text-muted-foreground">📱 {o.customer_phone}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleString("th-TH")}</p>
+                    </div>
+                    <div className="text-right space-y-1.5">
+                      <p className="text-xl font-bold text-primary">฿{o.total_amount}</p>
+                      {sc && (
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${sc.color}`}>
+                          {sc.icon} {sc.label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-              {o.dormitory_map_link && (
-                <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                  📍 ดูที่อยู่หอพัก
-                </a>
-              )}
-              {o.note && <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">💬 {o.note}</p>}
-              {o.slip_url && (
-                <a href={o.slip_url} target="_blank" rel="noopener noreferrer">
-                  <img src={o.slip_url} alt="สลิป" className="h-28 rounded-lg object-cover border border-border shadow-sm" />
-                </a>
-              )}
+                  {/* Extra info */}
+                  <div className="flex flex-wrap gap-2">
+                    {o.dormitory_map_link && (
+                      <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground px-3 py-1.5 rounded-full transition-colors">
+                        <MapPin className="h-3 w-3 text-primary" /> ดูที่อยู่หอพัก
+                      </a>
+                    )}
+                    {o.note && (
+                      <span className="inline-flex items-center gap-1.5 text-xs bg-muted text-muted-foreground px-3 py-1.5 rounded-full">
+                        <MessageSquare className="h-3 w-3" /> {o.note}
+                      </span>
+                    )}
+                  </div>
 
-              <div className="flex items-center gap-2 flex-wrap pt-1">
-                <Select value={o.status} onValueChange={(v) => updateStatus.mutate({ id: o.id, status: v })}>
-                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">⏳ รอตรวจสอบ</SelectItem>
-                    <SelectItem value="confirmed">✅ ยืนยันแล้ว</SelectItem>
-                    <SelectItem value="preparing">👨‍🍳 กำลังเตรียม</SelectItem>
-                    <SelectItem value="delivering">🚗 กำลังจัดส่ง</SelectItem>
-                    <SelectItem value="completed">✅ เสร็จสิ้น</SelectItem>
-                    <SelectItem value="cancelled">❌ ยกเลิก</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setSelectedOrder(selectedOrder?.id === o.id ? null : o)}>
-                  {selectedOrder?.id === o.id ? "ซ่อนรายการ" : "ดูรายการ"}
-                </Button>
-              </div>
+                  {/* Slip */}
+                  {o.slip_url && (
+                    <a href={o.slip_url} target="_blank" rel="noopener noreferrer" className="block">
+                      <img src={o.slip_url} alt="สลิป" className="h-32 rounded-xl object-cover border border-border shadow-sm hover:shadow-md transition-shadow" />
+                    </a>
+                  )}
 
-              {selectedOrder?.id === o.id && orderItems && (
-                <div className="mt-2 pl-4 border-l-2 border-primary/30 space-y-1">
-                  {orderItems.map((item) => (
-                    <p key={item.id} className="text-sm text-foreground">
-                      {item.product_name} x{item.quantity} — <span className="text-primary">฿{item.price * item.quantity}</span>
-                    </p>
-                  ))}
+                  <Separator />
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Select value={o.status} onValueChange={(v) => updateStatus.mutate({ id: o.id, status: v })}>
+                      <SelectTrigger className="w-[170px] rounded-xl text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">⏳ รอตรวจสอบ</SelectItem>
+                        <SelectItem value="confirmed">✅ ยืนยันแล้ว</SelectItem>
+                        <SelectItem value="preparing">👨‍🍳 กำลังเตรียม</SelectItem>
+                        <SelectItem value="delivering">🚗 กำลังจัดส่ง</SelectItem>
+                        <SelectItem value="completed">✅ เสร็จสิ้น</SelectItem>
+                        <SelectItem value="cancelled">❌ ยกเลิก</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" className="rounded-xl gap-1.5"
+                      onClick={() => setSelectedOrder(selectedOrder?.id === o.id ? null : o)}>
+                      {selectedOrder?.id === o.id ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {selectedOrder?.id === o.id ? "ซ่อนรายการ" : "ดูรายการ"}
+                    </Button>
+                  </div>
+
+                  {/* Order Items */}
+                  {selectedOrder?.id === o.id && orderItems && (
+                    <div className="mt-1 bg-muted/30 rounded-xl p-3 border border-border/50 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">รายการสินค้า</p>
+                      {orderItems.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-sm">
+                          <span className="text-foreground">{item.product_name} <span className="text-muted-foreground">x{item.quantity}</span></span>
+                          <span className="font-medium text-primary">฿{item.price * item.quantity}</span>
+                        </div>
+                      ))}
+                      <Separator />
+                      <div className="flex justify-between font-bold text-sm">
+                        <span className="text-foreground">รวม</span>
+                        <span className="text-primary">฿{o.total_amount}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {orders.length === 0 && <p className="text-center text-muted-foreground py-8">ยังไม่มีออเดอร์</p>}
+              </CardContent>
+            </Card>
+          );
+        })}
+        {filteredOrders.length === 0 && (
+          <div className="text-center py-16 text-muted-foreground">
+            <ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>ไม่มีออเดอร์{filterStatus !== "all" ? "ในสถานะนี้" : ""}</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+/* ===================== SETTINGS ===================== */
 function ShopSettings() {
   const queryClient = useQueryClient();
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -539,57 +651,74 @@ function ShopSettings() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
+  if (isLoading) return (
+    <div className="flex justify-center py-12">
+      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+    </div>
+  );
 
   return (
     <div className="max-w-lg space-y-6">
-      <h2 className="text-lg font-semibold text-foreground">ตั้งค่าร้าน & แบรนด์</h2>
+      <div>
+        <h2 className="text-xl font-bold text-foreground">⚙️ ตั้งค่าร้าน & แบรนด์</h2>
+        <p className="text-sm text-muted-foreground">จัดการข้อมูลร้านและโลโก้แบรนด์</p>
+      </div>
 
-      <Card className="border-border">
+      {/* Logo Card */}
+      <Card className="border-border overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Image className="h-4 w-4" /> โลโก้แบรนด์
+            <Image className="h-4 w-4 text-primary" /> โลโก้แบรนด์
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {form.logo_url && !logoFile && (
-            <div className="flex items-center gap-4">
-              <img src={form.logo_url} alt="logo" className="h-20 rounded-xl object-contain border border-border p-1 bg-muted" />
-              <p className="text-sm text-muted-foreground">โลโก้ปัจจุบัน — จะแสดงบน Navbar, หน้าแรก และ Footer</p>
+            <div className="flex items-center gap-4 bg-muted/30 rounded-xl p-4 border border-border/50">
+              <img src={form.logo_url} alt="logo" className="h-20 w-20 rounded-xl object-contain bg-card border border-border p-1" />
+              <div>
+                <p className="text-sm font-medium text-foreground">โลโก้ปัจจุบัน</p>
+                <p className="text-xs text-muted-foreground mt-1">จะแสดงใน Navbar, หน้าแรก และ Footer</p>
+              </div>
             </div>
           )}
-          <Input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} />
+          <div className="space-y-2">
+            <Label className="text-sm">อัพโหลดโลโก้ใหม่</Label>
+            <Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} />
+          </div>
         </CardContent>
       </Card>
 
-      <Card className="border-border">
+      {/* Shop Info Card */}
+      <Card className="border-border overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Settings className="h-4 w-4" /> ข้อมูลร้าน
+            <Store className="h-4 w-4 text-primary" /> ข้อมูลร้าน
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>ชื่อร้าน</Label>
-            <Input value={form.shop_name ?? ""} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} />
+            <Label className="text-sm font-medium">ชื่อร้าน</Label>
+            <Input className="rounded-xl" value={form.shop_name ?? ""} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <Label>คำโปรย (Tagline)</Label>
-            <Input value={form.shop_tagline ?? ""} onChange={(e) => setForm({ ...form, shop_tagline: e.target.value })} />
+            <Label className="text-sm font-medium">คำโปรย (Tagline)</Label>
+            <Input className="rounded-xl" value={form.shop_tagline ?? ""} onChange={(e) => setForm({ ...form, shop_tagline: e.target.value })} />
           </div>
-          <div className="space-y-2">
-            <Label>เบอร์โทรศัพท์</Label>
-            <Input value={form.shop_phone ?? ""} onChange={(e) => setForm({ ...form, shop_phone: e.target.value })} placeholder="0xx-xxx-xxxx" />
-          </div>
-          <div className="space-y-2">
-            <Label>LINE ID</Label>
-            <Input value={form.shop_line_id ?? ""} onChange={(e) => setForm({ ...form, shop_line_id: e.target.value })} placeholder="@lineid" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">เบอร์โทรศัพท์</Label>
+              <Input className="rounded-xl" value={form.shop_phone ?? ""} onChange={(e) => setForm({ ...form, shop_phone: e.target.value })} placeholder="0xx-xxx-xxxx" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">LINE ID</Label>
+              <Input className="rounded-xl" value={form.shop_line_id ?? ""} onChange={(e) => setForm({ ...form, shop_line_id: e.target.value })} placeholder="@lineid" />
+            </div>
           </div>
         </CardContent>
       </Card>
 
       <Button
-        className="w-full bg-primary text-primary-foreground"
+        className="w-full bg-primary text-primary-foreground rounded-xl h-12 text-base shadow-sm"
         onClick={() => saveMutation.mutate()}
         disabled={saveMutation.isPending}
       >
