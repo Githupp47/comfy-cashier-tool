@@ -24,6 +24,7 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [orderCount, setOrderCount] = useState<number | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
