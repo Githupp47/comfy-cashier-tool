@@ -8,16 +8,18 @@ export function Navbar() {
   const { itemCount } = useCart();
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-      <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <Link to="/" className="text-lg font-bold text-foreground">
-          🍦 ข้าวไอติม & เชื้อโคจิ
+    <nav className="sticky top-0 z-50 border-b border-border bg-card/90 backdrop-blur-md">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <Link to="/" className="flex items-center gap-2 text-lg font-bold text-foreground hover:text-primary transition-colors">
+          <span className="text-2xl">🌾</span>
+          <span>ข้าวไอติม & เชื้อโคจิ</span>
         </Link>
         <Link to="/checkout">
-          <Button variant="ghost" size="icon" className="relative">
-            <ShoppingCart className="h-5 w-5" />
+          <Button variant="outline" size="sm" className="relative rounded-full gap-2 border-primary/30 hover:bg-primary/10">
+            <ShoppingCart className="h-4 w-4" />
+            <span className="hidden sm:inline">ตะกร้า</span>
             {itemCount > 0 && (
-              <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary text-primary-foreground">
+              <Badge className="h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary text-primary-foreground">
                 {itemCount}
               </Badge>
             )}

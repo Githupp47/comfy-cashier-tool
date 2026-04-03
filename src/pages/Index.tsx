@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ProductCard } from "@/components/ProductCard";
 import { Navbar } from "@/components/Navbar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import heroImage from "@/assets/hero-rice-field.jpg";
 
 export default function Index() {
   const { data: products, isLoading } = useQuery({
@@ -26,21 +27,58 @@ export default function Index() {
       <Navbar />
 
       {/* Hero */}
-      <section className="relative h-[50vh] min-h-[360px] overflow-hidden bg-accent">
-        <div className="hero-overlay absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/40">
-          <div className="text-center space-y-3 px-4">
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground">
-              🍦 ข้าวไอติม & เชื้อโคจิ
+      <section className="relative h-[55vh] min-h-[400px] overflow-hidden">
+        <img
+          src={heroImage}
+          alt="ทุ่งข้าวไทย"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 hero-overlay flex items-center justify-center">
+          <div className="text-center space-y-4 px-4">
+            <div className="inline-block px-4 py-1 rounded-full bg-primary/20 backdrop-blur-sm border border-primary/30 mb-2">
+              <span className="text-sm font-medium text-primary-foreground/90">🌾 จากทุ่งนาสู่ของอร่อย</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground drop-shadow-lg">
+              ข้าวไอติม & เชื้อโคจิ
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto">
-              จากข้าวไทยหลากหลายพันธุ์ สู่ไอติมข้าวรสชาติเฉพาะตัว และเชื้อโคจิคุณภาพ
+            <p className="text-lg md:text-xl text-primary-foreground/85 max-w-2xl mx-auto leading-relaxed drop-shadow">
+              จากข้าวไทยหลากหลายพันธุ์ สู่ไอติมข้าวรสชาติเฉพาะตัว<br className="hidden md:block" />
+              และเชื้อโคจิคุณภาพสำหรับคนรักอาหารหมัก
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="border-b border-border bg-card">
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+            <div className="space-y-2">
+              <div className="text-3xl">🍦</div>
+              <h3 className="font-semibold text-foreground">ไอติมข้าวแท้</h3>
+              <p className="text-sm text-muted-foreground">ทำจากข้าวไทยคุณภาพดี ไม่ใส่สารกันเสีย</p>
+            </div>
+            <div className="space-y-2">
+              <div className="text-3xl">🍚</div>
+              <h3 className="font-semibold text-foreground">เชื้อโคจิพรีเมียม</h3>
+              <p className="text-sm text-muted-foreground">เชื้อโคจิคุณภาพสูง สำหรับทำอาหารหมักเอง</p>
+            </div>
+            <div className="space-y-2">
+              <div className="text-3xl">🚗</div>
+              <h3 className="font-semibold text-foreground">ส่งถึงหอพัก</h3>
+              <p className="text-sm text-muted-foreground">สั่งง่าย ส่งไว แค่แชร์ลิงก์ Google Maps</p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Products */}
       <section className="container mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground">สินค้าของเรา</h2>
+          <p className="text-muted-foreground mt-2">เลือกสินค้าที่ถูกใจแล้วสั่งเลย!</p>
+        </div>
+
         <Tabs defaultValue="all" className="space-y-8">
           <TabsList className="mx-auto w-fit">
             <TabsTrigger value="all">ทั้งหมด</TabsTrigger>
@@ -51,7 +89,7 @@ export default function Index() {
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-card rounded-lg h-80 animate-pulse" />
+                <div key={i} className="bg-card rounded-xl h-80 animate-pulse border border-border" />
               ))}
             </div>
           ) : (
@@ -81,8 +119,10 @@ export default function Index() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-card">
-        <div className="container mx-auto px-4 py-8 text-center text-muted-foreground text-sm">
-          <p>© 2026 ข้าวไอติม & เชื้อโคจิ — จากทุ่งนาสู่ของอร่อย</p>
+        <div className="container mx-auto px-4 py-10 text-center space-y-3">
+          <p className="text-lg font-semibold text-foreground">🌾 ข้าวไอติม & เชื้อโคจิ</p>
+          <p className="text-sm text-muted-foreground">จากทุ่งนาสู่ของอร่อย — สั่งง่าย ส่งไวถึงหอพัก</p>
+          <p className="text-xs text-muted-foreground">© 2026 All rights reserved</p>
         </div>
       </footer>
     </div>

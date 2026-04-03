@@ -2,46 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
+
 @layer base {
   :root {
-    --background: 40 33% 96%;
-    --foreground: 30 10% 15%;
+    --background: 38 40% 97%;
+    --foreground: 25 15% 12%;
 
-    --card: 40 30% 98%;
-    --card-foreground: 30 10% 15%;
+    --card: 36 35% 99%;
+    --card-foreground: 25 15% 12%;
 
-    --popover: 40 30% 98%;
-    --popover-foreground: 30 10% 15%;
+    --popover: 36 35% 99%;
+    --popover-foreground: 25 15% 12%;
 
-    --primary: 33 80% 55%;
+    --primary: 30 75% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 40 25% 92%;
-    --secondary-foreground: 30 10% 25%;
+    --secondary: 38 30% 93%;
+    --secondary-foreground: 25 15% 20%;
 
-    --muted: 40 20% 93%;
-    --muted-foreground: 30 8% 50%;
+    --muted: 38 25% 94%;
+    --muted-foreground: 25 10% 45%;
 
-    --accent: 33 60% 90%;
-    --accent-foreground: 33 80% 30%;
+    --accent: 30 50% 92%;
+    --accent-foreground: 30 70% 28%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 33 20% 88%;
-    --input: 33 20% 88%;
-    --ring: 33 80% 55%;
+    --border: 30 18% 90%;
+    --input: 30 18% 88%;
+    --ring: 30 75% 50%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 40 30% 98%;
-    --sidebar-foreground: 30 10% 15%;
-    --sidebar-primary: 33 80% 55%;
+    --sidebar-background: 36 35% 99%;
+    --sidebar-foreground: 25 15% 12%;
+    --sidebar-primary: 30 75% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 33 60% 90%;
-    --sidebar-accent-foreground: 33 80% 30%;
-    --sidebar-border: 33 20% 88%;
-    --sidebar-ring: 33 80% 55%;
+    --sidebar-accent: 30 50% 92%;
+    --sidebar-accent-foreground: 30 70% 28%;
+    --sidebar-border: 30 18% 90%;
+    --sidebar-ring: 30 75% 50%;
   }
 }
 
@@ -50,15 +52,16 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: 'Noto Sans Thai', 'Inter', sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Noto Sans Thai', 'Inter', system-ui, sans-serif;
   }
 }
 
 .hero-overlay {
   background: linear-gradient(
-    to bottom,
-    hsla(30, 10%, 15%, 0.3) 0%,
-    hsla(30, 10%, 15%, 0.5) 100%
+    180deg,
+    hsla(25, 15%, 12%, 0.15) 0%,
+    hsla(25, 15%, 12%, 0.45) 60%,
+    hsla(25, 15%, 12%, 0.6) 100%
   );
 }
