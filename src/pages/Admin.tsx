@@ -368,3 +368,105 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
     </div>
   );
 }
+
+function ShopSettings() {
+  const queryClient = useQueryClient();
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ["shop-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("shop_settings").select("*");
+      if (error) throw error;
+      return data as { id: string; key: string; value: string | null }[];
+    },
+  });
+
+  const getVal = (key: string) => settings?.find((s) => s.key === key)?.value ?? "";
+
+  const [form, setForm] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (settings) {
+      const obj: Record<string, string> = {};
+      settings.forEach((s) => { obj[s.key] = s.value ?? ""; });
+      setForm(obj);
+    }
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      let logoUrl = form.logo_url;
+
+      if (logoFile) {
+        const ext = logoFile.name.split(".").pop();
+        const fileName = `logo_${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from("product-images").upload(fileName, logoFile);
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+        logoUrl = urlData.publicUrl;
+      }
+
+      const updates: Record<string, string> = { ...form, logo_url: logoUrl };
+      for (const [key, value] of Object.entries(updates)) {
+        const { error } = await supabase
+          .from("shop_settings")
+          .update({ value })
+          .eq("key", key);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shop-settings"] });
+      setLogoFile(null);
+      toast.success("บันทึกการตั้งค่าสำเร็จ");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  if (isLoading) return <p className="text-center text-muted-foreground py-8">กำลังโหลด...</p>;
+
+  return (
+    <div className="max-w-lg space-y-6">
+      <h2 className="text-lg font-semibold text-foreground">ตั้งค่าร้าน</h2>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>โลโก้ร้าน</Label>
+          {form.logo_url && !logoFile && (
+            <img src={form.logo_url} alt="logo" className="h-20 rounded-lg object-contain border border-border p-1" />
+          )}
+          <Input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} />
+        </div>
+
+        <div className="space-y-2">
+          <Label>ชื่อร้าน</Label>
+          <Input value={form.shop_name ?? ""} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} />
+        </div>
+
+        <div className="space-y-2">
+          <Label>คำโปรย (Tagline)</Label>
+          <Input value={form.shop_tagline ?? ""} onChange={(e) => setForm({ ...form, shop_tagline: e.target.value })} />
+        </div>
+
+        <div className="space-y-2">
+          <Label>เบอร์โทรศัพท์</Label>
+          <Input value={form.shop_phone ?? ""} onChange={(e) => setForm({ ...form, shop_phone: e.target.value })} placeholder="0xx-xxx-xxxx" />
+        </div>
+
+        <div className="space-y-2">
+          <Label>LINE ID</Label>
+          <Input value={form.shop_line_id ?? ""} onChange={(e) => setForm({ ...form, shop_line_id: e.target.value })} placeholder="@lineid" />
+        </div>
+
+        <Button
+          className="w-full bg-primary text-primary-foreground"
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+        >
+          {saveMutation.isPending ? "กำลังบันทึก..." : "💾 บันทึกการตั้งค่า"}
+        </Button>
+      </div>
+    </div>
+  );
+}
