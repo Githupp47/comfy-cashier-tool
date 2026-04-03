@@ -2,10 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ProductCard } from "@/components/ProductCard";
 import { Navbar } from "@/components/Navbar";
+import { useShopSettings } from "@/hooks/useShopSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero-rice-field.jpg";
 
 export default function Index() {
+  const { shopName, tagline, logoUrl } = useShopSettings();
+
   const { data: products, isLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
@@ -28,23 +31,18 @@ export default function Index() {
 
       {/* Hero */}
       <section className="relative h-[55vh] min-h-[400px] overflow-hidden">
-        <img
-          src={heroImage}
-          alt="ทุ่งข้าวไทย"
-          className="w-full h-full object-cover"
-        />
+        <img src={heroImage} alt="ทุ่งข้าวไทย" className="w-full h-full object-cover" />
         <div className="absolute inset-0 hero-overlay flex items-center justify-center">
           <div className="text-center space-y-4 px-4">
+            {logoUrl && (
+              <img src={logoUrl} alt={shopName} className="h-24 md:h-32 mx-auto rounded-xl shadow-lg object-contain bg-background/20 backdrop-blur-sm p-2" />
+            )}
             <div className="inline-block px-4 py-1 rounded-full bg-primary/20 backdrop-blur-sm border border-primary/30 mb-2">
-              <span className="text-sm font-medium text-primary-foreground/90">🌾 จากทุ่งนาสู่ของอร่อย</span>
+              <span className="text-sm font-medium text-primary-foreground/90">🌾 {tagline}</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground drop-shadow-lg">
-              ข้าวไอติม & เชื้อโคจิ
+              {shopName}
             </h1>
-            <p className="text-lg md:text-xl text-primary-foreground/85 max-w-2xl mx-auto leading-relaxed drop-shadow">
-              จากข้าวไทยหลากหลายพันธุ์ สู่ไอติมข้าวรสชาติเฉพาะตัว<br className="hidden md:block" />
-              และเชื้อโคจิคุณภาพสำหรับคนรักอาหารหมัก
-            </p>
           </div>
         </div>
       </section>
@@ -120,8 +118,11 @@ export default function Index() {
       {/* Footer */}
       <footer className="border-t border-border bg-card">
         <div className="container mx-auto px-4 py-10 text-center space-y-3">
-          <p className="text-lg font-semibold text-foreground">🌾 ข้าวไอติม & เชื้อโคจิ</p>
-          <p className="text-sm text-muted-foreground">จากทุ่งนาสู่ของอร่อย — สั่งง่าย ส่งไวถึงหอพัก</p>
+          <div className="flex items-center justify-center gap-3">
+            {logoUrl && <img src={logoUrl} alt={shopName} className="h-10 rounded-md object-contain" />}
+            <p className="text-lg font-semibold text-foreground">{shopName}</p>
+          </div>
+          <p className="text-sm text-muted-foreground">{tagline}</p>
           <p className="text-xs text-muted-foreground">© 2026 All rights reserved</p>
         </div>
       </footer>
