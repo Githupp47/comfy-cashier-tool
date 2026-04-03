@@ -40,6 +40,26 @@ export default function Admin() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Sound notification for new orders via realtime
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("admin-new-orders")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders" },
+        () => {
+          const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp2XjHhjaGJ3ipeanJeIc2Bla3yLmJqVh3JfZGt8jJiZlIZwXmVsfY6ZmpWHcF5la32NmJmUhnBeZWx9jpiZlIZwXmRsfI6YmZSGcF5la32OmJmUhnBeZGx8jpiZlYdxX2VsfY6YmZSGcF5lbH2OmJmUhnBeZWt9jpiZlIZwXmVrfY6YmpWHcV9lbH2OmJmVh3FfZWx9jpiZlIZwXmVsfY6YmZSGcF5la32OmJmUhnBeZWx9jpiZlIZwXmVrfY6YmpWHcV9lbH2OmJmUh3FfZWx9jpiZlIZwXmVrfY+YmpWHcV9la32OmJqVh3FfZWx9jpiZlIdxX2VsfY6YmZWHcV9lbH2OmJmUhnBeZWx9jpiZlIZwXmVsfY6YmpWHcV9la32OmJmVh3FfZWx9jpiZlIZw");
+          audio.volume = 0.7;
+          audio.play().catch(() => {});
+          toast.success("🔔 มีออเดอร์ใหม่เข้ามา!", { duration: 5000 });
+          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session, queryClient]);
+
   const { data: products } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
