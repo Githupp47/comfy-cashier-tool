@@ -84,6 +84,7 @@ export default function Admin() {
           <TabsList>
             <TabsTrigger value="products">สินค้า</TabsTrigger>
             <TabsTrigger value="orders">ออเดอร์</TabsTrigger>
+            <TabsTrigger value="settings">⚙️ ตั้งค่าร้าน</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products" className="mt-6">
@@ -92,6 +93,10 @@ export default function Admin() {
 
           <TabsContent value="orders" className="mt-6">
             <OrdersManager orders={orders ?? []} queryClient={queryClient} />
+          </TabsContent>
+
+          <TabsContent value="settings" className="mt-6">
+            <ShopSettings />
           </TabsContent>
         </Tabs>
       </div>
