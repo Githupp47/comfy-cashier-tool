@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag, Settings, Image } from "lucide-react";
+import { ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag, Settings, Image, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
