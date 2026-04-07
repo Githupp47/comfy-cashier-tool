@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { useShopSettings } from "@/hooks/useShopSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero-rice-field.jpg";
+import { ChatWidget } from "@/components/ChatWidget";
 
 export default function Index() {
   const { shopName, tagline, logoUrl } = useShopSettings();
@@ -126,6 +127,7 @@ export default function Index() {
           <p className="text-xs text-muted-foreground">© 2026 All rights reserved</p>
         </div>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
