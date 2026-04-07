@@ -15,12 +15,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag,
-  Settings, Image, Bell, BellRing, TrendingUp, Clock, CheckCircle2,
-  MapPin, MessageSquare, Eye, EyeOff, Volume2, VolumeX, Store
+  Settings, Image, BellRing, TrendingUp, Clock, CheckCircle2,
+  MapPin, MessageSquare, Eye, EyeOff, Volume2, VolumeX, Store, Send,
+  BarChart3
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import brandLogo from "@/assets/brand-logo.png";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 type Product = Tables<"products">;
 type Order = Tables<"orders">;
@@ -52,27 +54,38 @@ export default function Admin() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Realtime notification for new orders
+  // Realtime: new orders
   useEffect(() => {
     if (!session) return;
     const channel = supabase
       .channel("admin-new-orders")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "orders" },
-        () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, () => {
+        if (soundEnabled && audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        }
+        toast("🔔 ออเดอร์ใหม่เข้ามาแล้ว!", { description: "กดที่แท็บออเดอร์เพื่อตรวจสอบ", duration: 8000 });
+        queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session, queryClient, soundEnabled]);
+
+  // Realtime: new chat messages from customers
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("admin-chat-notify")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload: any) => {
+        if (payload.new?.sender_type === "customer") {
           if (soundEnabled && audioRef.current) {
             audioRef.current.currentTime = 0;
             audioRef.current.play().catch(() => {});
           }
-          toast("🔔 ออเดอร์ใหม่เข้ามาแล้ว!", {
-            description: "กดที่แท็บออเดอร์เพื่อตรวจสอบ",
-            duration: 8000,
-            action: { label: "ดูเลย", onClick: () => {} },
-          });
-          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+          toast("💬 มีข้อความใหม่จากลูกค้า!", { duration: 5000 });
+          queryClient.invalidateQueries({ queryKey: ["admin-chats"] });
         }
-      )
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session, queryClient, soundEnabled]);
@@ -114,12 +127,32 @@ export default function Admin() {
     const today = new Date().toDateString();
     return new Date(o.created_at).toDateString() === today;
   }).length ?? 0;
-  const completedOrders = orders?.filter(o => o.status === "completed").length ?? 0;
   const totalRevenue = orders?.filter(o => o.status !== "cancelled").reduce((sum, o) => sum + Number(o.total_amount), 0) ?? 0;
+
+  // Chart data: orders per day (last 7 days)
+  const chartData = (() => {
+    if (!orders) return [];
+    const days: Record<string, { date: string; orders: number; revenue: number }> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const label = d.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+      days[key] = { date: label, orders: 0, revenue: 0 };
+    }
+    orders.forEach((o) => {
+      const key = new Date(o.created_at).toISOString().slice(0, 10);
+      if (days[key]) {
+        days[key].orders++;
+        if (o.status !== "cancelled") days[key].revenue += Number(o.total_amount);
+      }
+    });
+    return Object.values(days);
+  })();
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Premium Header */}
+      {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-md">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -133,21 +166,13 @@ export default function Admin() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full relative"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              title={soundEnabled ? "ปิดเสียงแจ้งเตือน" : "เปิดเสียงแจ้งเตือน"}
-            >
+            <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setSoundEnabled(!soundEnabled)} title={soundEnabled ? "ปิดเสียง" : "เปิดเสียง"}>
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
             </Button>
             {pendingOrders > 0 && (
               <div className="relative">
                 <BellRing className="h-5 w-5 text-primary animate-pulse" />
-                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1">
-                  {pendingOrders}
-                </span>
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1">{pendingOrders}</span>
               </div>
             )}
             <Button variant="outline" size="sm" onClick={handleLogout} className="rounded-full gap-2 ml-2">
@@ -158,71 +183,58 @@ export default function Admin() {
       </header>
 
       <div className="container mx-auto px-4 py-6 space-y-6 max-w-5xl">
-        {/* Stats Grid */}
+        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card className="bg-card border-border hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 rounded-xl bg-primary/10">
-                  <Package className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-xs text-muted-foreground font-medium">สินค้า</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{products?.length ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">รายการทั้งหมด</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 rounded-xl bg-accent">
-                  <Clock className="h-5 w-5 text-accent-foreground" />
-                </div>
-                <span className="text-xs text-muted-foreground font-medium">รอดำเนินการ</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{pendingOrders}</p>
-              <p className="text-xs text-muted-foreground mt-1">ออเดอร์รอตรวจ</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 rounded-xl bg-primary/10">
-                  <ShoppingBag className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-xs text-muted-foreground font-medium">วันนี้</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{todayOrders}</p>
-              <p className="text-xs text-muted-foreground mt-1">ออเดอร์วันนี้</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 rounded-xl bg-primary/10">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-xs text-muted-foreground font-medium">รายได้</span>
-              </div>
-              <p className="text-2xl font-bold text-primary">฿{totalRevenue.toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground mt-1">ยอดรวมทั้งหมด</p>
-            </CardContent>
-          </Card>
+          <Card className="bg-card border-border"><CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2"><div className="p-2 rounded-xl bg-primary/10"><Package className="h-5 w-5 text-primary" /></div><span className="text-xs text-muted-foreground">สินค้า</span></div>
+            <p className="text-3xl font-bold text-foreground">{products?.length ?? 0}</p>
+          </CardContent></Card>
+          <Card className="bg-card border-border"><CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2"><div className="p-2 rounded-xl bg-accent"><Clock className="h-5 w-5 text-accent-foreground" /></div><span className="text-xs text-muted-foreground">รอดำเนินการ</span></div>
+            <p className="text-3xl font-bold text-foreground">{pendingOrders}</p>
+          </CardContent></Card>
+          <Card className="bg-card border-border"><CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2"><div className="p-2 rounded-xl bg-primary/10"><ShoppingBag className="h-5 w-5 text-primary" /></div><span className="text-xs text-muted-foreground">วันนี้</span></div>
+            <p className="text-3xl font-bold text-foreground">{todayOrders}</p>
+          </CardContent></Card>
+          <Card className="bg-card border-border"><CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2"><div className="p-2 rounded-xl bg-primary/10"><TrendingUp className="h-5 w-5 text-primary" /></div><span className="text-xs text-muted-foreground">รายได้</span></div>
+            <p className="text-2xl font-bold text-primary">฿{totalRevenue.toLocaleString()}</p>
+          </CardContent></Card>
         </div>
+
+        {/* Chart */}
+        {chartData.length > 0 && (
+          <Card className="border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> ออเดอร์ 7 วันล่าสุด</CardTitle>
+            </CardHeader>
+            <CardContent className="pr-2">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                    formatter={(value: number, name: string) => [name === "revenue" ? `฿${value.toLocaleString()}` : value, name === "revenue" ? "รายได้" : "ออเดอร์"]}
+                  />
+                  <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs */}
         <Tabs defaultValue="orders" className="space-y-6">
-          <TabsList className="bg-card border border-border p-1 h-auto rounded-xl">
+          <TabsList className="bg-card border border-border p-1 h-auto rounded-xl flex-wrap">
             <TabsTrigger value="orders" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <ShoppingBag className="h-4 w-4" /> ออเดอร์
-              {pendingOrders > 0 && (
-                <Badge variant="destructive" className="h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
-                  {pendingOrders}
-                </Badge>
-              )}
+              {pendingOrders > 0 && <Badge variant="destructive" className="h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-[10px]">{pendingOrders}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
+              <MessageSquare className="h-4 w-4" /> แชท
             </TabsTrigger>
             <TabsTrigger value="products" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Package className="h-4 w-4" /> สินค้า
@@ -232,16 +244,113 @@ export default function Admin() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="orders">
-            <OrdersManager orders={orders ?? []} queryClient={queryClient} />
-          </TabsContent>
-          <TabsContent value="products">
-            <ProductsManager products={products ?? []} queryClient={queryClient} />
-          </TabsContent>
-          <TabsContent value="settings">
-            <ShopSettings />
-          </TabsContent>
+          <TabsContent value="orders"><OrdersManager orders={orders ?? []} queryClient={queryClient} /></TabsContent>
+          <TabsContent value="chat"><AdminChat /></TabsContent>
+          <TabsContent value="products"><ProductsManager products={products ?? []} queryClient={queryClient} /></TabsContent>
+          <TabsContent value="settings"><ShopSettings /></TabsContent>
         </Tabs>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== ADMIN CHAT ===================== */
+function AdminChat() {
+  const [orders, setOrders] = useState<{ id: string; customer_name: string; customer_phone: string }[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMsg, setNewMsg] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    supabase.from("chat_messages").select("order_id").then(({ data }) => {
+      if (!data) return;
+      const uniqueOrderIds = [...new Set(data.map(d => d.order_id))];
+      if (uniqueOrderIds.length === 0) return;
+      supabase.from("orders").select("id, customer_name, customer_phone").in("id", uniqueOrderIds).then(({ data: orderData }) => {
+        if (orderData) setOrders(orderData);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const fetch = async () => {
+      const { data } = await supabase.from("chat_messages").select("*").eq("order_id", selectedOrder).order("created_at");
+      if (data) setMessages(data);
+      // Mark as read
+      await supabase.from("chat_messages").update({ is_read: true }).eq("order_id", selectedOrder).eq("sender_type", "customer");
+    };
+    fetch();
+
+    const channel = supabase
+      .channel(`admin-chat-${selectedOrder}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `order_id=eq.${selectedOrder}` }, (payload) => {
+        setMessages(prev => [...prev, payload.new]);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedOrder]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!newMsg.trim() || !selectedOrder) return;
+    await supabase.from("chat_messages").insert({ order_id: selectedOrder, sender_type: "admin", message: newMsg.trim() });
+    setNewMsg("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold text-foreground">💬 แชทกับลูกค้า</h2>
+
+      <div className="grid md:grid-cols-3 gap-4" style={{ minHeight: 400 }}>
+        {/* Order list */}
+        <div className="space-y-2 md:border-r md:pr-4 border-border">
+          <p className="text-xs text-muted-foreground font-medium">ออเดอร์ที่มีแชท</p>
+          {orders.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">ยังไม่มีแชท</p>}
+          {orders.map(o => (
+            <button key={o.id} onClick={() => setSelectedOrder(o.id)}
+              className={`w-full text-left p-3 rounded-xl text-sm transition-colors ${selectedOrder === o.id ? "bg-primary/10 border border-primary/30" : "bg-muted/50 hover:bg-muted"}`}>
+              <p className="font-medium text-foreground">{o.customer_name}</p>
+              <p className="text-xs text-muted-foreground">📱 {o.customer_phone} • #{o.id.slice(0, 8)}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Chat area */}
+        <div className="md:col-span-2 flex flex-col bg-muted/20 rounded-xl border border-border overflow-hidden">
+          {!selectedOrder ? (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              <p>← เลือกออเดอร์เพื่อดูแชท</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-80">
+                {messages.map((m: any) => (
+                  <div key={m.id} className={`flex ${m.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${
+                      m.sender_type === "admin"
+                        ? "bg-primary text-primary-foreground rounded-br-md"
+                        : "bg-card text-foreground rounded-bl-md border border-border"
+                    }`}>
+                      {m.message}
+                    </div>
+                  </div>
+                ))}
+                {messages.length === 0 && <p className="text-center text-xs text-muted-foreground pt-8">ยังไม่มีข้อความ</p>}
+                <div ref={bottomRef} />
+              </div>
+              <div className="p-3 border-t border-border flex gap-2 bg-card">
+                <Input className="rounded-xl flex-1 text-sm" placeholder="พิมพ์ตอบกลับ..." value={newMsg}
+                  onChange={(e) => setNewMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} />
+                <Button size="icon" className="rounded-xl shrink-0" onClick={sendMessage}><Send className="h-4 w-4" /></Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -326,33 +435,19 @@ function ProductsManager({ products, queryClient }: { products: Product[]; query
             <CardContent className="p-0">
               <div className="flex items-center gap-4 p-4">
                 <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0 border border-border shadow-sm">
-                  {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-2xl bg-muted">
-                      {p.category === "ice_cream" ? "🍦" : "🍚"}
-                    </div>
-                  )}
+                  {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl bg-muted">{p.category === "ice_cream" ? "🍦" : "🍚"}</div>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-foreground truncate">{p.name}</p>
-                    <Badge variant={p.is_available ? "default" : "secondary"} className="text-[10px] shrink-0">
-                      {p.is_available ? "✓ พร้อมขาย" : "ปิดขาย"}
-                    </Badge>
+                    <Badge variant={p.is_available ? "default" : "secondary"} className="text-[10px] shrink-0">{p.is_available ? "✓ พร้อมขาย" : "ปิดขาย"}</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {p.category === "ice_cream" ? "🍦 ไอติม" : "🍚 โคจิ"} {p.rice_variety ? `• ${p.rice_variety}` : ""} {p.weight ? `• ${p.weight}` : ""}
-                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{p.category === "ice_cream" ? "🍦 ไอติม" : "🍚 โคจิ"} {p.rice_variety ? `• ${p.rice_variety}` : ""} {p.weight ? `• ${p.weight}` : ""}</p>
                   <p className="text-primary font-bold mt-0.5">฿{p.price}</p>
                 </div>
                 <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                  <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => openEdit(p)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="outline" className="rounded-xl h-9 w-9 text-destructive hover:bg-destructive/10 hover:border-destructive" onClick={() => { if (confirm("ลบสินค้านี้?")) deleteMutation.mutate(p.id); }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button size="icon" variant="outline" className="rounded-xl h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => { if (confirm("ลบสินค้านี้?")) deleteMutation.mutate(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               </div>
             </CardContent>
@@ -367,70 +462,30 @@ function ProductsManager({ products, queryClient }: { products: Product[]; query
         )}
       </div>
 
-      {/* Product Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg">{editProduct?.id ? "✏️ แก้ไขสินค้า" : "➕ เพิ่มสินค้าใหม่"}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="text-lg">{editProduct?.id ? "✏️ แก้ไขสินค้า" : "➕ เพิ่มสินค้าใหม่"}</DialogTitle></DialogHeader>
           {editProduct && (
             <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">ชื่อสินค้า</Label>
-                <Input className="rounded-xl" value={editProduct.name ?? ""} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">คำอธิบาย</Label>
-                <Textarea className="rounded-xl" value={editProduct.description ?? ""} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} />
-              </div>
+              <div className="space-y-2"><Label className="text-sm font-medium">ชื่อสินค้า</Label><Input className="rounded-xl" value={editProduct.name ?? ""} onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })} /></div>
+              <div className="space-y-2"><Label className="text-sm font-medium">คำอธิบาย</Label><Textarea className="rounded-xl" value={editProduct.description ?? ""} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">ราคา (฿)</Label>
-                  <Input className="rounded-xl" type="number" value={editProduct.price ?? 0} onChange={(e) => setEditProduct({ ...editProduct, price: Number(e.target.value) })} />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">หมวดหมู่</Label>
+                <div className="space-y-2"><Label className="text-sm font-medium">ราคา (฿)</Label><Input className="rounded-xl" type="number" value={editProduct.price ?? 0} onChange={(e) => setEditProduct({ ...editProduct, price: Number(e.target.value) })} /></div>
+                <div className="space-y-2"><Label className="text-sm font-medium">หมวดหมู่</Label>
                   <Select value={editProduct.category ?? "ice_cream"} onValueChange={(v) => setEditProduct({ ...editProduct, category: v })}>
                     <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ice_cream">🍦 ไอติมข้าว</SelectItem>
-                      <SelectItem value="koji">🍚 เชื้อโคจิ</SelectItem>
-                    </SelectContent>
+                    <SelectContent><SelectItem value="ice_cream">🍦 ไอติมข้าว</SelectItem><SelectItem value="koji">🍚 เชื้อโคจิ</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">สายพันธุ์ข้าว</Label>
-                  <Input className="rounded-xl" value={editProduct.rice_variety ?? ""} onChange={(e) => setEditProduct({ ...editProduct, rice_variety: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">น้ำหนัก</Label>
-                  <Input className="rounded-xl" value={editProduct.weight ?? ""} onChange={(e) => setEditProduct({ ...editProduct, weight: e.target.value })} placeholder="เช่น 500g" />
-                </div>
+                <div className="space-y-2"><Label className="text-sm font-medium">สายพันธุ์ข้าว</Label><Input className="rounded-xl" value={editProduct.rice_variety ?? ""} onChange={(e) => setEditProduct({ ...editProduct, rice_variety: e.target.value })} /></div>
+                <div className="space-y-2"><Label className="text-sm font-medium">น้ำหนัก</Label><Input className="rounded-xl" value={editProduct.weight ?? ""} onChange={(e) => setEditProduct({ ...editProduct, weight: e.target.value })} placeholder="เช่น 500g" /></div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">ลำดับการแสดง</Label>
-                <Input className="rounded-xl" type="number" value={editProduct.sort_order ?? 0} onChange={(e) => setEditProduct({ ...editProduct, sort_order: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">รูปสินค้า</Label>
-                <Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
-                {editProduct.image_url && !imageFile && (
-                  <img src={editProduct.image_url} alt="" className="h-20 rounded-xl object-cover border border-border" />
-                )}
-              </div>
-              <div className="flex items-center gap-3 bg-muted/50 rounded-xl p-3">
-                <Switch checked={editProduct.is_available ?? true} onCheckedChange={(v) => setEditProduct({ ...editProduct, is_available: v })} />
-                <Label className="text-sm">สินค้าพร้อมขาย</Label>
-              </div>
-              <Button
-                className="w-full bg-primary text-primary-foreground rounded-xl h-11 text-base"
-                onClick={() => saveMutation.mutate(editProduct)}
-                disabled={saveMutation.isPending}
-              >
-                {saveMutation.isPending ? "กำลังบันทึก..." : "💾 บันทึก"}
-              </Button>
+              <div className="space-y-2"><Label className="text-sm font-medium">ลำดับการแสดง</Label><Input className="rounded-xl" type="number" value={editProduct.sort_order ?? 0} onChange={(e) => setEditProduct({ ...editProduct, sort_order: Number(e.target.value) })} /></div>
+              <div className="space-y-2"><Label className="text-sm font-medium">รูปสินค้า</Label><Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />{editProduct.image_url && !imageFile && <img src={editProduct.image_url} alt="" className="h-20 rounded-xl object-cover border border-border" />}</div>
+              <div className="flex items-center gap-3 bg-muted/50 rounded-xl p-3"><Switch checked={editProduct.is_available ?? true} onCheckedChange={(v) => setEditProduct({ ...editProduct, is_available: v })} /><Label className="text-sm">สินค้าพร้อมขาย</Label></div>
+              <Button className="w-full bg-primary text-primary-foreground rounded-xl h-11 text-base" onClick={() => saveMutation.mutate(editProduct)} disabled={saveMutation.isPending}>{saveMutation.isPending ? "กำลังบันทึก..." : "💾 บันทึก"}</Button>
             </div>
           )}
         </DialogContent>
@@ -465,6 +520,20 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
     },
   });
 
+  const deleteOrder = useMutation({
+    mutationFn: async (id: string) => {
+      // order_items cascade via FK, but let's be safe
+      await supabase.from("order_items").delete().eq("order_id", id);
+      const { error } = await supabase.from("orders").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      toast.success("ลบออเดอร์สำเร็จ");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
     pending: { label: "รอตรวจสอบ", color: "bg-amber-100 text-amber-800 border-amber-200", icon: <Clock className="h-3 w-3" /> },
     confirmed: { label: "ยืนยันแล้ว", color: "bg-blue-100 text-blue-800 border-blue-200", icon: <CheckCircle2 className="h-3 w-3" /> },
@@ -484,9 +553,7 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
           <p className="text-sm text-muted-foreground">{orders.length} ออเดอร์ทั้งหมด</p>
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[160px] rounded-xl">
-            <SelectValue placeholder="กรองสถานะ" />
-          </SelectTrigger>
+          <SelectTrigger className="w-[160px] rounded-xl"><SelectValue placeholder="กรองสถานะ" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">ทั้งหมด</SelectItem>
             <SelectItem value="pending">⏳ รอตรวจสอบ</SelectItem>
@@ -506,7 +573,6 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
             <Card key={o.id} className={`border-border overflow-hidden transition-all ${o.status === "pending" ? "ring-2 ring-primary/20 border-primary/30" : ""}`}>
               <CardContent className="p-0">
                 <div className="p-4 space-y-3">
-                  {/* Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <p className="font-bold text-foreground text-base">{o.customer_name}</p>
@@ -515,30 +581,19 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
                     </div>
                     <div className="text-right space-y-1.5">
                       <p className="text-xl font-bold text-primary">฿{o.total_amount}</p>
-                      {sc && (
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${sc.color}`}>
-                          {sc.icon} {sc.label}
-                        </span>
-                      )}
+                      {sc && <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${sc.color}`}>{sc.icon} {sc.label}</span>}
                     </div>
                   </div>
 
-                  {/* Extra info */}
                   <div className="flex flex-wrap gap-2">
                     {o.dormitory_map_link && (
-                      <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground px-3 py-1.5 rounded-full transition-colors">
+                      <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground px-3 py-1.5 rounded-full transition-colors">
                         <MapPin className="h-3 w-3 text-primary" /> ดูที่อยู่หอพัก
                       </a>
                     )}
-                    {o.note && (
-                      <span className="inline-flex items-center gap-1.5 text-xs bg-muted text-muted-foreground px-3 py-1.5 rounded-full">
-                        <MessageSquare className="h-3 w-3" /> {o.note}
-                      </span>
-                    )}
+                    {o.note && <span className="inline-flex items-center gap-1.5 text-xs bg-muted text-muted-foreground px-3 py-1.5 rounded-full"><MessageSquare className="h-3 w-3" /> {o.note}</span>}
                   </div>
 
-                  {/* Slip */}
                   {o.slip_url && (
                     <a href={o.slip_url} target="_blank" rel="noopener noreferrer" className="block">
                       <img src={o.slip_url} alt="สลิป" className="h-32 rounded-xl object-cover border border-border shadow-sm hover:shadow-md transition-shadow" />
@@ -547,12 +602,9 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
 
                   <Separator />
 
-                  {/* Actions */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <Select value={o.status} onValueChange={(v) => updateStatus.mutate({ id: o.id, status: v })}>
-                      <SelectTrigger className="w-[170px] rounded-xl text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger className="w-[170px] rounded-xl text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">⏳ รอตรวจสอบ</SelectItem>
                         <SelectItem value="confirmed">✅ ยืนยันแล้ว</SelectItem>
@@ -565,11 +617,16 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
                     <Button variant="outline" size="sm" className="rounded-xl gap-1.5"
                       onClick={() => setSelectedOrder(selectedOrder?.id === o.id ? null : o)}>
                       {selectedOrder?.id === o.id ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                      {selectedOrder?.id === o.id ? "ซ่อนรายการ" : "ดูรายการ"}
+                      {selectedOrder?.id === o.id ? "ซ่อน" : "ดูรายการ"}
                     </Button>
+                    {o.status === "cancelled" && (
+                      <Button variant="outline" size="sm" className="rounded-xl gap-1.5 text-destructive hover:bg-destructive/10 border-destructive/30"
+                        onClick={() => { if (confirm("ลบออเดอร์นี้ถาวร?")) deleteOrder.mutate(o.id); }}>
+                        <Trash2 className="h-3.5 w-3.5" /> ลบ
+                      </Button>
+                    )}
                   </div>
 
-                  {/* Order Items */}
                   {selectedOrder?.id === o.id && orderItems && (
                     <div className="mt-1 bg-muted/30 rounded-xl p-3 border border-border/50 space-y-2">
                       <p className="text-xs font-medium text-muted-foreground mb-2">รายการสินค้า</p>
@@ -651,77 +708,38 @@ function ShopSettings() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return (
-    <div className="flex justify-center py-12">
-      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-    </div>
-  );
+  if (isLoading) return <div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
 
   return (
     <div className="max-w-lg space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-foreground">⚙️ ตั้งค่าร้าน & แบรนด์</h2>
-        <p className="text-sm text-muted-foreground">จัดการข้อมูลร้านและโลโก้แบรนด์</p>
-      </div>
+      <div><h2 className="text-xl font-bold text-foreground">⚙️ ตั้งค่าร้าน & แบรนด์</h2><p className="text-sm text-muted-foreground">จัดการข้อมูลร้านและโลโก้แบรนด์</p></div>
 
-      {/* Logo Card */}
       <Card className="border-border overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Image className="h-4 w-4 text-primary" /> โลโก้แบรนด์
-          </CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Image className="h-4 w-4 text-primary" /> โลโก้แบรนด์</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {form.logo_url && !logoFile && (
             <div className="flex items-center gap-4 bg-muted/30 rounded-xl p-4 border border-border/50">
               <img src={form.logo_url} alt="logo" className="h-20 w-20 rounded-xl object-contain bg-card border border-border p-1" />
-              <div>
-                <p className="text-sm font-medium text-foreground">โลโก้ปัจจุบัน</p>
-                <p className="text-xs text-muted-foreground mt-1">จะแสดงใน Navbar, หน้าแรก และ Footer</p>
-              </div>
+              <div><p className="text-sm font-medium text-foreground">โลโก้ปัจจุบัน</p><p className="text-xs text-muted-foreground mt-1">จะแสดงใน Navbar, หน้าแรก และ Footer</p></div>
             </div>
           )}
-          <div className="space-y-2">
-            <Label className="text-sm">อัพโหลดโลโก้ใหม่</Label>
-            <Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} />
-          </div>
+          <div className="space-y-2"><Label className="text-sm">อัพโหลดโลโก้ใหม่</Label><Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} /></div>
         </CardContent>
       </Card>
 
-      {/* Shop Info Card */}
       <Card className="border-border overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Store className="h-4 w-4 text-primary" /> ข้อมูลร้าน
-          </CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Store className="h-4 w-4 text-primary" /> ข้อมูลร้าน</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">ชื่อร้าน</Label>
-            <Input className="rounded-xl" value={form.shop_name ?? ""} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">คำโปรย (Tagline)</Label>
-            <Input className="rounded-xl" value={form.shop_tagline ?? ""} onChange={(e) => setForm({ ...form, shop_tagline: e.target.value })} />
-          </div>
+          <div className="space-y-2"><Label className="text-sm font-medium">ชื่อร้าน</Label><Input className="rounded-xl" value={form.shop_name ?? ""} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} /></div>
+          <div className="space-y-2"><Label className="text-sm font-medium">คำโปรย (Tagline)</Label><Input className="rounded-xl" value={form.shop_tagline ?? ""} onChange={(e) => setForm({ ...form, shop_tagline: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">เบอร์โทรศัพท์</Label>
-              <Input className="rounded-xl" value={form.shop_phone ?? ""} onChange={(e) => setForm({ ...form, shop_phone: e.target.value })} placeholder="0xx-xxx-xxxx" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">LINE ID</Label>
-              <Input className="rounded-xl" value={form.shop_line_id ?? ""} onChange={(e) => setForm({ ...form, shop_line_id: e.target.value })} placeholder="@lineid" />
-            </div>
+            <div className="space-y-2"><Label className="text-sm font-medium">เบอร์โทรศัพท์</Label><Input className="rounded-xl" value={form.shop_phone ?? ""} onChange={(e) => setForm({ ...form, shop_phone: e.target.value })} placeholder="0xx-xxx-xxxx" /></div>
+            <div className="space-y-2"><Label className="text-sm font-medium">LINE ID</Label><Input className="rounded-xl" value={form.shop_line_id ?? ""} onChange={(e) => setForm({ ...form, shop_line_id: e.target.value })} placeholder="@lineid" /></div>
           </div>
         </CardContent>
       </Card>
 
-      <Button
-        className="w-full bg-primary text-primary-foreground rounded-xl h-12 text-base shadow-sm"
-        onClick={() => saveMutation.mutate()}
-        disabled={saveMutation.isPending}
-      >
+      <Button className="w-full bg-primary text-primary-foreground rounded-xl h-12 text-base shadow-sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
         {saveMutation.isPending ? "กำลังบันทึก..." : "💾 บันทึกการตั้งค่า"}
       </Button>
     </div>

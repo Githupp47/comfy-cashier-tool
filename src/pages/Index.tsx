@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { useShopSettings } from "@/hooks/useShopSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero-rice-field.jpg";
+import { ChatWidget } from "@/components/ChatWidget";
 
 export default function Index() {
   const { shopName, tagline, logoUrl } = useShopSettings();
