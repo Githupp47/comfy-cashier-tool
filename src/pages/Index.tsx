@@ -127,6 +127,7 @@ export default function Index() {
           <p className="text-xs text-muted-foreground">© 2026 All rights reserved</p>
         </div>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
