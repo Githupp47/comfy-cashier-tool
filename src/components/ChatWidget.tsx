@@ -22,6 +22,12 @@ export function ChatWidget() {
   const [newMsg, setNewMsg] = useState("");
   const [step, setStep] = useState<"phone" | "orders" | "chat">("phone");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/notification.wav");
+    audioRef.current.volume = 0.7;
+  }, []);
 
   useEffect(() => {
     if (!selectedOrder) return;
@@ -38,7 +44,11 @@ export function ChatWidget() {
     const channel = supabase
       .channel(`chat-${selectedOrder}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `order_id=eq.${selectedOrder}` }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as ChatMessage]);
+        const newMsg = payload.new as ChatMessage;
+        setMessages((prev) => [...prev, newMsg]);
+        if (newMsg.sender_type === "admin") {
+          audioRef.current?.play().catch(() => {});
+        }
       })
       .subscribe();
 
