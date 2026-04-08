@@ -513,6 +513,17 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("orders").update({ status }).eq("id", id);
       if (error) throw error;
+      // Auto-send chat message when order is completed/delivered
+      if (status === "completed" || status === "delivering") {
+        const msg = status === "delivering"
+          ? "🚚 ออเดอร์ของคุณกำลังจัดส่งแล้วค่ะ!"
+          : "✅ ออเดอร์ของคุณจัดส่งเสร็จเรียบร้อยแล้วค่ะ ขอบคุณที่อุดหนุนนะคะ 🙏";
+        await supabase.from("chat_messages").insert({
+          order_id: id,
+          sender_type: "admin",
+          message: msg,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
