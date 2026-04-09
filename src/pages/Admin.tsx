@@ -17,12 +17,12 @@ import {
   ArrowLeft, LogOut, Plus, Pencil, Trash2, Package, ShoppingBag,
   Settings, Image, BellRing, TrendingUp, Clock, CheckCircle2,
   MapPin, MessageSquare, Eye, EyeOff, Volume2, VolumeX, Store, Send,
-  BarChart3
+  BarChart3, CalendarDays
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import brandLogo from "@/assets/brand-logo.png";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, Legend } from "recharts";
 
 type Product = Tables<"products">;
 type Order = Tables<"orders">;
@@ -129,8 +129,8 @@ export default function Admin() {
   }).length ?? 0;
   const totalRevenue = orders?.filter(o => o.status !== "cancelled").reduce((sum, o) => sum + Number(o.total_amount), 0) ?? 0;
 
-  // Chart data: orders per day (last 7 days)
-  const chartData = (() => {
+  // Chart data: daily (last 7 days)
+  const dailyChartData = (() => {
     if (!orders) return [];
     const days: Record<string, { date: string; orders: number; revenue: number }> = {};
     for (let i = 6; i >= 0; i--) {
@@ -148,6 +148,28 @@ export default function Admin() {
       }
     });
     return Object.values(days);
+  })();
+
+  // Chart data: monthly (last 6 months)
+  const monthlyChartData = (() => {
+    if (!orders) return [];
+    const months: Record<string, { month: string; orders: number; revenue: number }> = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("th-TH", { month: "short", year: "2-digit" });
+      months[key] = { month: label, orders: 0, revenue: 0 };
+    }
+    orders.forEach((o) => {
+      const d = new Date(o.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (months[key]) {
+        months[key].orders++;
+        if (o.status !== "cancelled") months[key].revenue += Number(o.total_amount);
+      }
+    });
+    return Object.values(months);
   })();
 
   return (
@@ -198,33 +220,61 @@ export default function Admin() {
             <p className="text-3xl font-bold text-foreground">{todayOrders}</p>
           </CardContent></Card>
           <Card className="bg-card border-border"><CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2"><div className="p-2 rounded-xl bg-primary/10"><TrendingUp className="h-5 w-5 text-primary" /></div><span className="text-xs text-muted-foreground">รายได้</span></div>
+            <div className="flex items-center justify-between mb-2"><div className="p-2 rounded-xl bg-primary/10"><TrendingUp className="h-5 w-5 text-primary" /></div><span className="text-xs text-muted-foreground">รายได้รวม</span></div>
             <p className="text-2xl font-bold text-primary">฿{totalRevenue.toLocaleString()}</p>
           </CardContent></Card>
         </div>
 
-        {/* Chart */}
-        {chartData.length > 0 && (
-          <Card className="border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> ออเดอร์ 7 วันล่าสุด</CardTitle>
-            </CardHeader>
-            <CardContent className="pr-2">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-                    formatter={(value: number, name: string) => [name === "revenue" ? `฿${value.toLocaleString()}` : value, name === "revenue" ? "รายได้" : "ออเดอร์"]}
-                  />
-                  <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
+        {/* Charts */}
+        <div className="grid md:grid-cols-2 gap-4">
+          {dailyChartData.length > 0 && (
+            <Card className="border-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> ยอดขาย 7 วันล่าสุด</CardTitle>
+              </CardHeader>
+              <CardContent className="pr-2">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={dailyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12 }}
+                      formatter={(value: number, name: string) => [name === "revenue" ? `฿${value.toLocaleString()}` : value, name === "revenue" ? "รายได้" : "ออเดอร์"]}
+                    />
+                    <Legend formatter={(v) => v === "revenue" ? "รายได้" : "ออเดอร์"} />
+                    <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="revenue" fill="hsl(var(--accent-foreground))" radius={[6, 6, 0, 0]} opacity={0.6} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {monthlyChartData.length > 0 && (
+            <Card className="border-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /> ยอดขายรายเดือน (6 เดือน)</CardTitle>
+              </CardHeader>
+              <CardContent className="pr-2">
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={monthlyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12 }}
+                      formatter={(value: number, name: string) => [name === "revenue" ? `฿${value.toLocaleString()}` : value, name === "revenue" ? "รายได้" : "ออเดอร์"]}
+                    />
+                    <Legend formatter={(v) => v === "revenue" ? "รายได้" : "ออเดอร์"} />
+                    <Line type="monotone" dataKey="orders" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="revenue" stroke="hsl(var(--accent-foreground))" strokeWidth={2} dot={{ r: 4 }} opacity={0.7} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Tabs */}
         <Tabs defaultValue="orders" className="space-y-6">
@@ -254,51 +304,63 @@ export default function Admin() {
   );
 }
 
-/* ===================== ADMIN CHAT ===================== */
+/* ===================== ADMIN CHAT (session-based) ===================== */
 function AdminChat() {
-  const [orders, setOrders] = useState<{ id: string; customer_name: string; customer_phone: string }[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<{ session_id: string; last_message: string; last_at: string }[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase.from("chat_messages").select("order_id").then(({ data }) => {
+    // Get unique sessions with their latest message
+    const fetchSessions = async () => {
+      const { data } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (!data) return;
-      const uniqueOrderIds = [...new Set(data.map(d => d.order_id))];
-      if (uniqueOrderIds.length === 0) return;
-      supabase.from("orders").select("id, customer_name, customer_phone").in("id", uniqueOrderIds).then(({ data: orderData }) => {
-        if (orderData) setOrders(orderData);
+      const sessionMap = new Map<string, { session_id: string; last_message: string; last_at: string }>();
+      data.forEach((m: any) => {
+        const sid = m.session_id || m.order_id || "unknown";
+        if (!sessionMap.has(sid)) {
+          sessionMap.set(sid, { session_id: sid, last_message: m.message, last_at: m.created_at });
+        }
       });
-    });
+      setSessions(Array.from(sessionMap.values()));
+    };
+    fetchSessions();
   }, []);
 
   useEffect(() => {
-    if (!selectedOrder) return;
-    const fetch = async () => {
-      const { data } = await supabase.from("chat_messages").select("*").eq("order_id", selectedOrder).order("created_at");
+    if (!selectedSession) return;
+    const fetchMsgs = async () => {
+      const { data } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("session_id", selectedSession)
+        .order("created_at");
       if (data) setMessages(data);
-      // Mark as read
-      await supabase.from("chat_messages").update({ is_read: true }).eq("order_id", selectedOrder).eq("sender_type", "customer");
+      await supabase.from("chat_messages").update({ is_read: true }).eq("session_id", selectedSession).eq("sender_type", "customer");
     };
-    fetch();
+    fetchMsgs();
 
     const channel = supabase
-      .channel(`admin-chat-${selectedOrder}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `order_id=eq.${selectedOrder}` }, (payload) => {
+      .channel(`admin-chat-${selectedSession}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `session_id=eq.${selectedSession}` }, (payload) => {
         setMessages(prev => [...prev, payload.new]);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [selectedOrder]);
+  }, [selectedSession]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMsg.trim() || !selectedOrder) return;
-    await supabase.from("chat_messages").insert({ order_id: selectedOrder, sender_type: "admin", message: newMsg.trim() });
+    if (!newMsg.trim() || !selectedSession) return;
+    await supabase.from("chat_messages").insert({ session_id: selectedSession, sender_type: "admin", message: newMsg.trim() });
     setNewMsg("");
   };
 
@@ -307,24 +369,25 @@ function AdminChat() {
       <h2 className="text-xl font-bold text-foreground">💬 แชทกับลูกค้า</h2>
 
       <div className="grid md:grid-cols-3 gap-4" style={{ minHeight: 400 }}>
-        {/* Order list */}
+        {/* Session list */}
         <div className="space-y-2 md:border-r md:pr-4 border-border">
-          <p className="text-xs text-muted-foreground font-medium">ออเดอร์ที่มีแชท</p>
-          {orders.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">ยังไม่มีแชท</p>}
-          {orders.map(o => (
-            <button key={o.id} onClick={() => setSelectedOrder(o.id)}
-              className={`w-full text-left p-3 rounded-xl text-sm transition-colors ${selectedOrder === o.id ? "bg-primary/10 border border-primary/30" : "bg-muted/50 hover:bg-muted"}`}>
-              <p className="font-medium text-foreground">{o.customer_name}</p>
-              <p className="text-xs text-muted-foreground">📱 {o.customer_phone} • #{o.id.slice(0, 8)}</p>
+          <p className="text-xs text-muted-foreground font-medium">เซสชันแชท</p>
+          {sessions.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">ยังไม่มีแชท</p>}
+          {sessions.map(s => (
+            <button key={s.session_id} onClick={() => setSelectedSession(s.session_id)}
+              className={`w-full text-left p-3 rounded-xl text-sm transition-colors ${selectedSession === s.session_id ? "bg-primary/10 border border-primary/30" : "bg-muted/50 hover:bg-muted"}`}>
+              <p className="font-medium text-foreground truncate">💬 {s.last_message.slice(0, 30)}{s.last_message.length > 30 ? "..." : ""}</p>
+              <p className="text-xs text-muted-foreground mt-1">🕐 {new Date(s.last_at).toLocaleString("th-TH")}</p>
+              <p className="text-[10px] text-muted-foreground">ID: {s.session_id.slice(0, 8)}</p>
             </button>
           ))}
         </div>
 
         {/* Chat area */}
         <div className="md:col-span-2 flex flex-col bg-muted/20 rounded-xl border border-border overflow-hidden">
-          {!selectedOrder ? (
+          {!selectedSession ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              <p>← เลือกออเดอร์เพื่อดูแชท</p>
+              <p>← เลือกเซสชันเพื่อดูแชท</p>
             </div>
           ) : (
             <>
@@ -513,7 +576,6 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("orders").update({ status }).eq("id", id);
       if (error) throw error;
-      // Auto-send chat message when order is completed/delivered
       if (status === "completed" || status === "delivering") {
         const msg = status === "delivering"
           ? "🚚 ออเดอร์ของคุณกำลังจัดส่งแล้วค่ะ!"
@@ -533,7 +595,6 @@ function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: 
 
   const deleteOrder = useMutation({
     mutationFn: async (id: string) => {
-      // order_items cascade via FK, but let's be safe
       await supabase.from("order_items").delete().eq("order_id", id);
       const { error } = await supabase.from("orders").delete().eq("id", id);
       if (error) throw error;
