@@ -20,24 +20,27 @@ export type Database = {
           id: string
           is_read: boolean
           message: string
-          order_id: string
+          order_id: string | null
           sender_type: string
+          session_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           is_read?: boolean
           message: string
-          order_id: string
+          order_id?: string | null
           sender_type?: string
+          session_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           is_read?: boolean
           message?: string
-          order_id?: string
+          order_id?: string | null
           sender_type?: string
+          session_id?: string | null
         }
         Relationships: [
           {
@@ -175,6 +178,33 @@ export type Database = {
           sort_order?: number
           updated_at?: string
           weight?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          session_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          session_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          session_id?: string
         }
         Relationships: []
       }
