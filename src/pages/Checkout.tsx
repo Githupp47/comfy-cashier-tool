@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Minus, Plus, Trash2, Upload, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import qrPayment from "@/assets/qr-payment.jpg";
+import qrPaymentFallback from "@/assets/qr-payment.jpg";
 
 export default function Checkout() {
   const { items, updateQuantity, removeItem, clearCart, total } = useCart();
@@ -22,6 +23,25 @@ export default function Checkout() {
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+
+  // Fetch payment settings from shop_settings
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("shop_settings").select("*");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data as { key: string; value: string | null }[]).forEach((s) => {
+        map[s.key] = s.value ?? "";
+      });
+      return map;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const qrImageUrl = paymentSettings?.payment_qr_url || "";
+  const bankAccount = paymentSettings?.payment_bank_account || "4230504802";
+  const bankName = paymentSettings?.payment_bank_name || "SCB (ไทยพาณิชย์)";
 
   const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -47,7 +67,6 @@ export default function Checkout() {
 
     setSubmitting(true);
     try {
-      // Upload slip
       const ext = slipFile.name.split(".").pop();
       const fileName = `${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
@@ -59,7 +78,6 @@ export default function Checkout() {
         .from("slips")
         .getPublicUrl(fileName);
 
-      // Create order
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
@@ -74,7 +92,6 @@ export default function Checkout() {
         .single();
       if (orderError) throw orderError;
 
-      // Create order items
       const orderItems = items.map((item) => ({
         order_id: order.id,
         product_id: item.product.id,
@@ -119,7 +136,6 @@ export default function Checkout() {
       <div className="container mx-auto px-4 py-8 max-w-2xl space-y-8">
         <h1 className="text-2xl font-bold text-foreground">🛒 สั่งซื้อสินค้า</h1>
 
-        {/* Cart Items */}
         {items.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <p>ตะกร้าว่าง</p>
@@ -165,7 +181,6 @@ export default function Checkout() {
               รวม: <span className="text-primary">฿{total}</span>
             </div>
 
-            {/* Customer Info */}
             <div className="space-y-4 border-t border-border pt-6">
               <h2 className="text-lg font-semibold text-foreground">📋 ข้อมูลผู้สั่ง</h2>
               <div className="space-y-2">
@@ -186,20 +201,22 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Payment */}
             <div className="space-y-4 border-t border-border pt-6">
               <h2 className="text-lg font-semibold text-foreground">💳 ชำระเงิน</h2>
               <div className="bg-card border border-border rounded-xl p-6 text-center space-y-4">
                 <p className="text-sm text-muted-foreground">สแกน QR Code หรือโอนเงินผ่าน PromptPay</p>
-                <img src={qrPayment} alt="QR Payment SCB PromptPay" className="mx-auto max-w-[280px] rounded-lg shadow-md" />
+                <img
+                  src={qrImageUrl || qrPaymentFallback}
+                  alt="QR Payment PromptPay"
+                  className="mx-auto max-w-[280px] rounded-lg shadow-md"
+                />
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">หรือโอนเข้าบัญชี SCB</p>
-                  <p className="text-lg font-mono font-bold text-foreground">4230504802</p>
+                  <p className="text-sm text-muted-foreground">หรือโอนเข้าบัญชี {bankName}</p>
+                  <p className="text-lg font-mono font-bold text-foreground">{bankAccount}</p>
                 </div>
                 <p className="text-lg font-bold text-primary">ยอดที่ต้องชำระ: ฿{total}</p>
               </div>
 
-              {/* Slip Upload */}
               <div className="space-y-2">
                 <Label>อัพโหลดสลิปการโอนเงิน *</Label>
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-xl cursor-pointer hover:bg-muted/50 transition-colors">
