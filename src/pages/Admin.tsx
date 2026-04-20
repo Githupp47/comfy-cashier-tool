@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowLeft, LogOut, Package, ShoppingBag,
+  LogOut, Package, ShoppingBag,
   Settings, BellRing, TrendingUp, Clock,
   MessageSquare, Volume2, VolumeX,
   BarChart3, CalendarDays
@@ -170,9 +170,6 @@ export default function Admin() {
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-md">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-full hover:bg-muted">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <img src={brandLogo} alt="HAKKŌ" className="h-10 w-10 rounded-lg object-cover" />
             <div>
               <h1 className="text-lg font-bold text-foreground tracking-tight">HAKKŌ Admin</h1>
