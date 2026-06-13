@@ -17,6 +17,15 @@ export function AdminChat() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const selectedRef = useRef<string | null>(null);
+
+  useEffect(() => { selectedRef.current = selectedSession; }, [selectedSession]);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/notification.wav");
+    audioRef.current.volume = 0.8;
+  }, []);
 
   const fetchSessions = async () => {
     const { data } = await supabase
@@ -38,6 +47,33 @@ export function AdminChat() {
   };
 
   useEffect(() => { fetchSessions(); }, []);
+
+  // Global listener: notify on any new customer message
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-chat-global")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages" },
+        (payload: any) => {
+          const m = payload.new;
+          if (m.sender_type === "customer") {
+            audioRef.current?.play().catch(() => {});
+            if (selectedRef.current !== m.session_id) {
+              toast("💬 ข้อความใหม่จากลูกค้า", { description: m.message });
+            }
+            fetchSessions();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "chat_messages" },
+        () => fetchSessions()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   useEffect(() => {
     if (!selectedSession) return;
