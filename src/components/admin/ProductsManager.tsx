@@ -10,8 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Download, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { downloadStockCsv } from "@/lib/exportStockCsv";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
@@ -41,13 +42,16 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setDialogOpen(false);
       setEditProduct(null);
       setImageFile(null);
-      toast.success("บันทึกสินค้าสำเร็จ");
+      toast.success("บันทึกสินค้าสำเร็จ — กำลังดาวน์โหลดไฟล์สต็อกอัตโนมัติ");
+      // Auto-download fresh stock CSV after save
+      const { data: fresh } = await supabase.from("products").select("*").order("sort_order");
+      if (fresh) downloadStockCsv(fresh as Product[]);
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -65,7 +69,7 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
   });
 
   const openNew = () => {
-    setEditProduct({ name: "", price: 0, category: "ice_cream", is_available: true, sort_order: 0 });
+    setEditProduct({ name: "", price: 0, category: "ice_cream", is_available: true, sort_order: 0, stock_quantity: 0 } as any);
     setImageFile(null);
     setDialogOpen(true);
   };
@@ -78,14 +82,19 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-foreground">📦 จัดการสินค้า</h2>
-          <p className="text-sm text-muted-foreground">{products.length} รายการ</p>
+          <h2 className="text-xl font-bold text-foreground">📦 จัดการสินค้า & สต็อก</h2>
+          <p className="text-sm text-muted-foreground">{products.length} รายการ · รวมสต็อก {products.reduce((s, p: any) => s + (p.stock_quantity ?? 0), 0)} ชิ้น</p>
         </div>
-        <Button onClick={openNew} className="bg-primary text-primary-foreground rounded-xl gap-2 shadow-sm">
-          <Plus className="h-4 w-4" /> เพิ่มสินค้า
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => { downloadStockCsv(products); toast.success("ดาวน์โหลดไฟล์สต็อก CSV แล้ว"); }} variant="outline" className="rounded-xl gap-2">
+            <Download className="h-4 w-4" /> CSV สต็อก
+          </Button>
+          <Button onClick={openNew} className="bg-primary text-primary-foreground rounded-xl gap-2 shadow-sm">
+            <Plus className="h-4 w-4" /> เพิ่มสินค้า
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3">
@@ -102,7 +111,13 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
                     <Badge variant={p.is_available ? "default" : "secondary"} className="text-[10px] shrink-0">{p.is_available ? "✓ พร้อมขาย" : "ปิดขาย"}</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{p.category === "ice_cream" ? "🍦 ไอติม" : "🍚 โคจิ"} {p.rice_variety ? `• ${p.rice_variety}` : ""} {p.weight ? `• ${p.weight}` : ""}</p>
-                  <p className="text-primary font-bold mt-0.5">฿{p.price}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-primary font-bold">฿{p.price}</p>
+                    <Badge variant={((p as any).stock_quantity ?? 0) <= 5 ? "destructive" : "outline"} className="text-[10px] gap-1">
+                      {((p as any).stock_quantity ?? 0) <= 5 && <AlertTriangle className="h-3 w-3" />}
+                      สต็อก: {(p as any).stock_quantity ?? 0}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
                   <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
@@ -141,7 +156,10 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
                 <div className="space-y-2"><Label className="text-sm font-medium">สายพันธุ์ข้าว</Label><Input className="rounded-xl" value={editProduct.rice_variety ?? ""} onChange={(e) => setEditProduct({ ...editProduct, rice_variety: e.target.value })} /></div>
                 <div className="space-y-2"><Label className="text-sm font-medium">น้ำหนัก</Label><Input className="rounded-xl" value={editProduct.weight ?? ""} onChange={(e) => setEditProduct({ ...editProduct, weight: e.target.value })} placeholder="เช่น 500g" /></div>
               </div>
-              <div className="space-y-2"><Label className="text-sm font-medium">ลำดับการแสดง</Label><Input className="rounded-xl" type="number" value={editProduct.sort_order ?? 0} onChange={(e) => setEditProduct({ ...editProduct, sort_order: Number(e.target.value) })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2"><Label className="text-sm font-medium">📦 จำนวนสต็อก</Label><Input className="rounded-xl" type="number" min={0} value={(editProduct as any).stock_quantity ?? 0} onChange={(e) => setEditProduct({ ...editProduct, stock_quantity: Number(e.target.value) } as any)} /></div>
+                <div className="space-y-2"><Label className="text-sm font-medium">ลำดับการแสดง</Label><Input className="rounded-xl" type="number" value={editProduct.sort_order ?? 0} onChange={(e) => setEditProduct({ ...editProduct, sort_order: Number(e.target.value) })} /></div>
+              </div>
               <div className="space-y-2"><Label className="text-sm font-medium">รูปสินค้า</Label><Input className="rounded-xl" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />{editProduct.image_url && !imageFile && <img src={editProduct.image_url} alt="" className="h-20 rounded-xl object-cover border border-border" />}</div>
               <div className="flex items-center gap-3 bg-muted/50 rounded-xl p-3"><Switch checked={editProduct.is_available ?? true} onCheckedChange={(v) => setEditProduct({ ...editProduct, is_available: v })} /><Label className="text-sm">สินค้าพร้อมขาย</Label></div>
               <Button className="w-full bg-primary text-primary-foreground rounded-xl h-11 text-base" onClick={() => saveMutation.mutate(editProduct)} disabled={saveMutation.isPending}>{saveMutation.isPending ? "กำลังบันทึก..." : "💾 บันทึก"}</Button>

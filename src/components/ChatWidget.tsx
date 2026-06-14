@@ -111,6 +111,10 @@ export function ChatWidget() {
       customer_phone: customerPhone.trim(),
       customer_name: customerName.trim() || null,
     });
+    // Trigger bot auto-reply (no-op if disabled)
+    supabase.functions.invoke("chat-bot-reply", {
+      body: { session_id: sessionId, message: text },
+    }).catch(() => {});
   };
 
   const saveProfile = () => {
@@ -151,9 +155,24 @@ export function ChatWidget() {
 
   const handleEnableNotif = async () => {
     const ok = await subscribe();
-    if (ok) toast.success("เปิดการแจ้งเตือนแล้ว");
+    if (ok) toast.success("เปิดการแจ้งเตือนแล้ว 🔔 จะได้รับเสียงแม้ปิดหน้านี้");
     else toast.error("ไม่สามารถเปิดการแจ้งเตือนได้");
   };
+
+  // Auto-prompt push notification once after first message
+  useEffect(() => {
+    if (open && isSupported && !isSubscribed && messages.length > 0 && customerPhone) {
+      const asked = localStorage.getItem("push_notif_asked");
+      if (!asked) {
+        localStorage.setItem("push_notif_asked", "1");
+        setTimeout(() => {
+          subscribe().then((ok) => {
+            if (ok) toast.success("เปิดแจ้งเตือนแล้ว 🔔 จะได้ยินเสียงแม้ปิดหน้านี้");
+          });
+        }, 1500);
+      }
+    }
+  }, [open, isSupported, isSubscribed, messages.length, customerPhone, subscribe]);
 
   return (
     <>

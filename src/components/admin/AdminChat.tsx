@@ -107,10 +107,20 @@ export function AdminChat() {
 
   const sendMessage = async () => {
     if (!newMsg.trim() || !selectedSession) return;
+    const text = newMsg.trim();
     await supabase.from("chat_messages").insert({
-      session_id: selectedSession, sender_type: "admin", message: newMsg.trim(),
+      session_id: selectedSession, sender_type: "admin", message: text,
     });
     setNewMsg("");
+    // Send push notification to customer
+    supabase.functions.invoke("send-push", {
+      body: {
+        session_id: selectedSession,
+        title: "💬 ข้อความจากร้าน HAKKŌ",
+        body: text.slice(0, 100),
+        url: "/",
+      },
+    }).catch(() => {});
   };
 
   const deleteMessage = async (id: string) => {
