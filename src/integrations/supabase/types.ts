@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_bot_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          system_prompt: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          system_prompt?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          system_prompt?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -154,6 +178,7 @@ export type Database = {
           price: number
           rice_variety: string | null
           sort_order: number
+          stock_quantity: number
           updated_at: string
           weight: string | null
         }
@@ -168,6 +193,7 @@ export type Database = {
           price?: number
           rice_variety?: string | null
           sort_order?: number
+          stock_quantity?: number
           updated_at?: string
           weight?: string | null
         }
@@ -182,6 +208,7 @@ export type Database = {
           price?: number
           rice_variety?: string | null
           sort_order?: number
+          stock_quantity?: number
           updated_at?: string
           weight?: string | null
         }
