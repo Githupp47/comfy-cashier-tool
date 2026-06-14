@@ -10,8 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Download, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { downloadStockCsv } from "@/lib/exportStockCsv";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
@@ -41,13 +42,16 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setDialogOpen(false);
       setEditProduct(null);
       setImageFile(null);
-      toast.success("บันทึกสินค้าสำเร็จ");
+      toast.success("บันทึกสินค้าสำเร็จ — กำลังดาวน์โหลดไฟล์สต็อกอัตโนมัติ");
+      // Auto-download fresh stock CSV after save
+      const { data: fresh } = await supabase.from("products").select("*").order("sort_order");
+      if (fresh) downloadStockCsv(fresh as Product[]);
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -65,7 +69,7 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
   });
 
   const openNew = () => {
-    setEditProduct({ name: "", price: 0, category: "ice_cream", is_available: true, sort_order: 0 });
+    setEditProduct({ name: "", price: 0, category: "ice_cream", is_available: true, sort_order: 0, stock_quantity: 0 } as any);
     setImageFile(null);
     setDialogOpen(true);
   };
