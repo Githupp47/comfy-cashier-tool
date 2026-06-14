@@ -10,7 +10,7 @@ import {
   LogOut, Package, ShoppingBag,
   Settings, BellRing, TrendingUp, Clock,
   MessageSquare, Volume2, VolumeX,
-  BarChart3, CalendarDays
+  BarChart3, CalendarDays, Bot
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -21,6 +21,7 @@ import { AdminChat } from "@/components/admin/AdminChat";
 import { ProductsManager } from "@/components/admin/ProductsManager";
 import { OrdersManager } from "@/components/admin/OrdersManager";
 import { ShopSettings } from "@/components/admin/ShopSettings";
+import { BotSettings } from "@/components/admin/BotSettings";
 
 type Order = Tables<"orders">;
 
@@ -278,6 +279,9 @@ export default function Admin() {
             <TabsTrigger value="products" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Package className="h-4 w-4" /> สินค้า
             </TabsTrigger>
+            <TabsTrigger value="bot" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
+              <Bot className="h-4 w-4" /> บอท
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Settings className="h-4 w-4" /> ตั้งค่า
             </TabsTrigger>
@@ -286,6 +290,7 @@ export default function Admin() {
           <TabsContent value="orders"><OrdersManager orders={orders ?? []} queryClient={queryClient} /></TabsContent>
           <TabsContent value="chat"><AdminChat /></TabsContent>
           <TabsContent value="products"><ProductsManager products={products ?? []} queryClient={queryClient} /></TabsContent>
+          <TabsContent value="bot"><BotSettings /></TabsContent>
           <TabsContent value="settings"><ShopSettings /></TabsContent>
         </Tabs>
       </div>
