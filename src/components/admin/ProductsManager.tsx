@@ -111,7 +111,13 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
                     <Badge variant={p.is_available ? "default" : "secondary"} className="text-[10px] shrink-0">{p.is_available ? "✓ พร้อมขาย" : "ปิดขาย"}</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{p.category === "ice_cream" ? "🍦 ไอติม" : "🍚 โคจิ"} {p.rice_variety ? `• ${p.rice_variety}` : ""} {p.weight ? `• ${p.weight}` : ""}</p>
-                  <p className="text-primary font-bold mt-0.5">฿{p.price}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-primary font-bold">฿{p.price}</p>
+                    <Badge variant={((p as any).stock_quantity ?? 0) <= 5 ? "destructive" : "outline"} className="text-[10px] gap-1">
+                      {((p as any).stock_quantity ?? 0) <= 5 && <AlertTriangle className="h-3 w-3" />}
+                      สต็อก: {(p as any).stock_quantity ?? 0}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
                   <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
