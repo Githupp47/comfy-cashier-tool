@@ -82,14 +82,19 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-foreground">📦 จัดการสินค้า</h2>
-          <p className="text-sm text-muted-foreground">{products.length} รายการ</p>
+          <h2 className="text-xl font-bold text-foreground">📦 จัดการสินค้า & สต็อก</h2>
+          <p className="text-sm text-muted-foreground">{products.length} รายการ · รวมสต็อก {products.reduce((s, p: any) => s + (p.stock_quantity ?? 0), 0)} ชิ้น</p>
         </div>
-        <Button onClick={openNew} className="bg-primary text-primary-foreground rounded-xl gap-2 shadow-sm">
-          <Plus className="h-4 w-4" /> เพิ่มสินค้า
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => { downloadStockCsv(products); toast.success("ดาวน์โหลดไฟล์สต็อก CSV แล้ว"); }} variant="outline" className="rounded-xl gap-2">
+            <Download className="h-4 w-4" /> CSV สต็อก
+          </Button>
+          <Button onClick={openNew} className="bg-primary text-primary-foreground rounded-xl gap-2 shadow-sm">
+            <Plus className="h-4 w-4" /> เพิ่มสินค้า
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3">
