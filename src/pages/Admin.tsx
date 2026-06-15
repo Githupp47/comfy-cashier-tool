@@ -295,6 +295,7 @@ export default function Admin() {
           <TabsContent value="chat"><AdminChat /></TabsContent>
           <TabsContent value="products"><ProductsManager products={products ?? []} queryClient={queryClient} /></TabsContent>
           <TabsContent value="bot"><BotSettings /></TabsContent>
+          <TabsContent value="integrations"><MessagingIntegrations /></TabsContent>
           <TabsContent value="settings"><ShopSettings /></TabsContent>
         </Tabs>
       </div>
