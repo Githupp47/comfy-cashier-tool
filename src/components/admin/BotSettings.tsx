@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bot, Save } from "lucide-react";
 import { toast } from "sonner";
+import brandLogo from "@/assets/brand-logo.png";
 
 export function BotSettings() {
   const [id, setId] = useState<string | null>(null);
