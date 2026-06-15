@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bot, Save } from "lucide-react";
 import { toast } from "sonner";
+import brandLogo from "@/assets/brand-logo.png";
 
 export function BotSettings() {
   const [id, setId] = useState<string | null>(null);
@@ -42,9 +43,12 @@ export function BotSettings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Bot className="h-5 w-5 text-primary" />
-        <h2 className="text-xl font-bold text-foreground">บอทตอบแชทอัตโนมัติ</h2>
+      <div className="flex items-center gap-3">
+        <img src={brandLogo} alt="HAKKŌ" className="h-10 w-10 rounded-lg object-cover" />
+        <div className="flex items-center gap-2">
+          <Bot className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold text-foreground">บอทตอบแชทอัตโนมัติ</h2>
+        </div>
       </div>
 
       <Card className="border-border">

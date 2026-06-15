@@ -6,6 +6,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function pushLineMessage(token: string, to: string, text: string) {
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    console.error("LINE push failed", res.status, t);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -20,7 +35,6 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Check if bot is enabled
     const { data: settings } = await supabase
       .from("chat_bot_settings")
       .select("*")
@@ -33,16 +47,14 @@ serve(async (req) => {
       });
     }
 
-    // Load product context
     const { data: products } = await supabase
       .from("products")
       .select("name, price, description, category, rice_variety, weight, stock_quantity, is_available")
       .eq("is_available", true);
 
-    // Load recent conversation
     const { data: history } = await supabase
       .from("chat_messages")
-      .select("sender_type, message")
+      .select("sender_type, message, platform, line_user_id")
       .eq("session_id", session_id)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -63,7 +75,7 @@ serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Lovable-API-Key": lovableKey,
+        Authorization: `Bearer ${lovableKey}`,
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
@@ -73,6 +85,7 @@ serve(async (req) => {
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
+      console.error("AI gateway error", aiRes.status, text);
       throw new Error(`AI gateway error ${aiRes.status}: ${text}`);
     }
 
@@ -80,11 +93,30 @@ serve(async (req) => {
     const reply = aiData.choices?.[0]?.message?.content?.trim();
     if (!reply) throw new Error("No reply from AI");
 
+    // Detect platform from session/history
+    const last = (history ?? []).find((m: any) => m.line_user_id);
+    const platform = session_id.startsWith("line:") ? "line" : (last?.platform ?? "web");
+    const lineUserId = last?.line_user_id ?? (session_id.startsWith("line:") ? session_id.slice(5) : null);
+
     await supabase.from("chat_messages").insert({
       session_id,
       sender_type: "admin",
       message: `🤖 ${reply}`,
+      platform,
+      line_user_id: lineUserId,
     });
+
+    // If LINE, push the reply back to the user
+    if (platform === "line" && lineUserId) {
+      const { data: integ } = await supabase
+        .from("messaging_integrations")
+        .select("channel_access_token, enabled")
+        .eq("platform", "line")
+        .maybeSingle();
+      if (integ?.enabled && integ.channel_access_token) {
+        await pushLineMessage(integ.channel_access_token, lineUserId, reply);
+      }
+    }
 
     return new Response(JSON.stringify({ reply }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
