@@ -283,6 +283,9 @@ export default function Admin() {
             <TabsTrigger value="bot" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Bot className="h-4 w-4" /> บอท
             </TabsTrigger>
+            <TabsTrigger value="integrations" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
+              <Plug className="h-4 w-4" /> เชื่อมต่อ
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Settings className="h-4 w-4" /> ตั้งค่า
             </TabsTrigger>
