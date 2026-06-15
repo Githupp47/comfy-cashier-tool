@@ -45,8 +45,10 @@ export type Database = {
           customer_phone: string | null
           id: string
           is_read: boolean
+          line_user_id: string | null
           message: string
           order_id: string | null
+          platform: string
           sender_type: string
           session_id: string | null
         }
@@ -56,8 +58,10 @@ export type Database = {
           customer_phone?: string | null
           id?: string
           is_read?: boolean
+          line_user_id?: string | null
           message: string
           order_id?: string | null
+          platform?: string
           sender_type?: string
           session_id?: string | null
         }
@@ -67,8 +71,10 @@ export type Database = {
           customer_phone?: string | null
           id?: string
           is_read?: boolean
+          line_user_id?: string | null
           message?: string
           order_id?: string | null
+          platform?: string
           sender_type?: string
           session_id?: string | null
         }
@@ -81,6 +87,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      messaging_integrations: {
+        Row: {
+          channel_access_token: string | null
+          channel_secret: string | null
+          created_at: string
+          enabled: boolean
+          extra: Json
+          id: string
+          platform: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          channel_access_token?: string | null
+          channel_secret?: string | null
+          created_at?: string
+          enabled?: boolean
+          extra?: Json
+          id?: string
+          platform: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          channel_access_token?: string | null
+          channel_secret?: string | null
+          created_at?: string
+          enabled?: boolean
+          extra?: Json
+          id?: string
+          platform?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
       }
       order_items: {
         Row: {
