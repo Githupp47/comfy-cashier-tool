@@ -22,6 +22,7 @@ import { ProductsManager } from "@/components/admin/ProductsManager";
 import { OrdersManager } from "@/components/admin/OrdersManager";
 import { ShopSettings } from "@/components/admin/ShopSettings";
 import { BotSettings } from "@/components/admin/BotSettings";
+import { MessagingIntegrations } from "@/components/admin/MessagingIntegrations";
 
 type Order = Tables<"orders">;
 
