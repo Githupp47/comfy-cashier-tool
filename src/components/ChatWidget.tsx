@@ -24,7 +24,7 @@ export function ChatWidget() {
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [customerName, setCustomerName] = useState<string>(() => localStorage.getItem("chat_customer_name") || "");
   const [customerPhone, setCustomerPhone] = useState<string>(() => localStorage.getItem("chat_customer_phone") || "");
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfile] = useState<boolean>(() => !localStorage.getItem("chat_customer_phone"));
   const [showRecover, setShowRecover] = useState(false);
   const [recoverPhone, setRecoverPhone] = useState("");
   const [recovering, setRecovering] = useState(false);
