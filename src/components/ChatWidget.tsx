@@ -24,7 +24,7 @@ export function ChatWidget() {
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [customerName, setCustomerName] = useState<string>(() => localStorage.getItem("chat_customer_name") || "");
   const [customerPhone, setCustomerPhone] = useState<string>(() => localStorage.getItem("chat_customer_phone") || "");
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfile] = useState<boolean>(() => !localStorage.getItem("chat_customer_phone"));
   const [showRecover, setShowRecover] = useState(false);
   const [recoverPhone, setRecoverPhone] = useState("");
   const [recovering, setRecovering] = useState(false);
@@ -234,7 +234,7 @@ export function ChatWidget() {
           </div>
 
           {/* Profile form (first-time or when phone missing) */}
-          {(showProfile || (!customerPhone && messages.length === 0)) && (
+          {showProfile && (
             <div className="p-4 bg-muted/30 border-b border-border space-y-3">
               <p className="text-xs text-muted-foreground">
                 กรอกข้อมูลเพื่อให้ทางร้านติดต่อกลับ และดูแชทเก่าได้ในอนาคต
