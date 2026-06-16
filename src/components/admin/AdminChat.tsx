@@ -18,6 +18,8 @@ export function AdminChat() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const selectedRef = useRef<string | null>(null);
@@ -114,7 +116,6 @@ export function AdminChat() {
       session_id: selectedSession, sender_type: "admin", message: text,
     });
     setNewMsg("");
-    // Send push notification to customer
     supabase.functions.invoke("send-push", {
       body: {
         session_id: selectedSession,
@@ -123,6 +124,31 @@ export function AdminChat() {
         url: "/",
       },
     }).catch(() => {});
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !selectedSession) return;
+    try {
+      setUploading(true);
+      const att = await uploadChatFile(file, selectedSession);
+      if (!att) return;
+      const msg = att.type === "image" ? "📎 [รูป] " + att.name : "📎 [ไฟล์] " + att.name;
+      await supabase.from("chat_messages").insert({
+        session_id: selectedSession,
+        sender_type: "admin",
+        message: msg,
+        attachment_url: att.url,
+        attachment_type: att.type,
+        attachment_name: att.name,
+      });
+      toast.success("ส่งไฟล์แล้ว");
+    } catch (err: any) {
+      toast.error(err.message || "อัพโหลดไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const deleteMessage = async (id: string) => {
