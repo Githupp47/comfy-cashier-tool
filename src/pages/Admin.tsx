@@ -87,6 +87,28 @@ export default function Admin() {
     return () => { supabase.removeChannel(channel); };
   }, [session, queryClient, soundEnabled]);
 
+  // Stock alert notifications
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("admin-stock-alerts")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stock_alerts" }, (payload: any) => {
+        const a = payload.new;
+        if (soundEnabled && audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        }
+        if (a.alert_type === "out") {
+          toast.error(`⚠️ สินค้าหมด: ${a.product_name}`, { duration: 10000, description: "กรุณาเติมสต็อกด่วน" });
+        } else {
+          toast.warning(`📉 สต็อกใกล้หมด: ${a.product_name} (เหลือ ${a.stock_quantity})`, { duration: 8000 });
+        }
+        queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session, queryClient, soundEnabled]);
+
   const { data: products } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
