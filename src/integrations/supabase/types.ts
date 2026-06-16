@@ -40,6 +40,9 @@ export type Database = {
       }
       chat_messages: {
         Row: {
+          attachment_name: string | null
+          attachment_type: string | null
+          attachment_url: string | null
           created_at: string
           customer_name: string | null
           customer_phone: string | null
@@ -53,6 +56,9 @@ export type Database = {
           session_id: string | null
         }
         Insert: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -66,6 +72,9 @@ export type Database = {
           session_id?: string | null
         }
         Update: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -306,6 +315,44 @@ export type Database = {
           value?: string | null
         }
         Relationships: []
+      }
+      stock_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          product_id: string
+          product_name: string
+          resolved: boolean
+          stock_quantity: number
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          id?: string
+          product_id: string
+          product_name: string
+          resolved?: boolean
+          stock_quantity: number
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          product_id?: string
+          product_name?: string
+          resolved?: boolean
+          stock_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_alerts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

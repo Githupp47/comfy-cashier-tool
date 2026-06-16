@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Trash2 } from "lucide-react";
+import { Send, Trash2, Paperclip, Loader2 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { uploadChatFile } from "@/lib/chatUpload";
+import { ChatAttachmentView } from "@/components/ChatAttachmentView";
 
 type SessionRow = { session_id: string; last_message: string; last_at: string; unread: number };
 
@@ -16,6 +18,8 @@ export function AdminChat() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const selectedRef = useRef<string | null>(null);
@@ -112,7 +116,6 @@ export function AdminChat() {
       session_id: selectedSession, sender_type: "admin", message: text,
     });
     setNewMsg("");
-    // Send push notification to customer
     supabase.functions.invoke("send-push", {
       body: {
         session_id: selectedSession,
@@ -121,6 +124,31 @@ export function AdminChat() {
         url: "/",
       },
     }).catch(() => {});
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !selectedSession) return;
+    try {
+      setUploading(true);
+      const att = await uploadChatFile(file, selectedSession);
+      if (!att) return;
+      const msg = att.type === "image" ? "📎 [รูป] " + att.name : "📎 [ไฟล์] " + att.name;
+      await supabase.from("chat_messages").insert({
+        session_id: selectedSession,
+        sender_type: "admin",
+        message: msg,
+        attachment_url: att.url,
+        attachment_type: att.type,
+        attachment_name: att.name,
+      });
+      toast.success("ส่งไฟล์แล้ว");
+    } catch (err: any) {
+      toast.error(err.message || "อัพโหลดไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const deleteMessage = async (id: string) => {
@@ -213,9 +241,15 @@ export function AdminChat() {
                     <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${
                       m.sender_type === "admin"
                         ? "bg-primary text-primary-foreground rounded-br-md"
-                        : "bg-card text-foreground rounded-bl-md border border-border"
+                        : m.sender_type === "bot"
+                          ? "bg-accent/40 text-foreground rounded-bl-md border border-accent"
+                          : "bg-card text-foreground rounded-bl-md border border-border"
                     }`}>
-                      {m.message}
+                      {m.sender_type === "bot" && <p className="text-[10px] font-semibold opacity-70 mb-0.5">🤖 บอท</p>}
+                      {m.message && <p className="whitespace-pre-wrap">{m.message}</p>}
+                      {m.attachment_url && (
+                        <ChatAttachmentView url={m.attachment_url} type={m.attachment_type} name={m.attachment_name} />
+                      )}
                     </div>
                     {m.sender_type !== "admin" && (
                       <Button size="icon" variant="ghost" onClick={() => deleteMessage(m.id)}
@@ -228,7 +262,12 @@ export function AdminChat() {
                 {messages.length === 0 && <p className="text-center text-xs text-muted-foreground pt-8">ยังไม่มีข้อความ</p>}
                 <div ref={bottomRef} />
               </div>
-              <div className="p-3 border-t border-border flex gap-2 bg-card">
+              <div className="p-3 border-t border-border flex gap-2 bg-card items-center">
+                <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileSelect} />
+                <Button size="icon" variant="ghost" className="rounded-xl shrink-0"
+                  onClick={() => fileInputRef.current?.click()} disabled={uploading} title="แนบไฟล์">
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                </Button>
                 <Input className="rounded-xl flex-1 text-sm" placeholder="พิมพ์ตอบกลับ..." value={newMsg}
                   onChange={(e) => setNewMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} />
                 <Button size="icon" className="rounded-xl shrink-0" onClick={sendMessage}><Send className="h-4 w-4" /></Button>
