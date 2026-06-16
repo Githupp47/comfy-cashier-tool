@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Send, X, Bell, BellOff, History } from "lucide-react";
+import { MessageCircle, Send, X, Bell, BellOff, History, Paperclip, Loader2 } from "lucide-react";
 import { usePushNotification } from "@/hooks/usePushNotification";
 import { toast } from "sonner";
+import { uploadChatFile } from "@/lib/chatUpload";
+import { ChatAttachmentView } from "@/components/ChatAttachmentView";
 
 function getOrCreateSessionId() {
   let id = localStorage.getItem("chat_session_id");
@@ -21,6 +23,7 @@ export function ChatWidget() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const [unread, setUnread] = useState(0);
+  const [uploading, setUploading] = useState(false);
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [customerName, setCustomerName] = useState<string>(() => localStorage.getItem("chat_customer_name") || "");
   const [customerPhone, setCustomerPhone] = useState<string>(() => localStorage.getItem("chat_customer_phone") || "");
@@ -28,6 +31,7 @@ export function ChatWidget() {
   const [showRecover, setShowRecover] = useState(false);
   const [recoverPhone, setRecoverPhone] = useState("");
   const [recovering, setRecovering] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { isSupported, isSubscribed, subscribe } = usePushNotification();
@@ -37,7 +41,6 @@ export function ChatWidget() {
     audioRef.current.volume = 0.7;
   }, []);
 
-  // Load messages for current session + subscribe
   useEffect(() => {
     let active = true;
     const fetchMessages = async () => {
@@ -49,7 +52,7 @@ export function ChatWidget() {
       if (!active) return;
       if (data) {
         setMessages(data);
-        setUnread(data.filter((m: any) => m.sender_type === "admin" && !m.is_read).length);
+        setUnread(data.filter((m: any) => m.sender_type !== "customer" && !m.is_read).length);
       }
     };
     fetchMessages();
@@ -61,11 +64,12 @@ export function ChatWidget() {
         { event: "INSERT", schema: "public", table: "chat_messages", filter: `session_id=eq.${sessionId}` },
         (payload: any) => {
           setMessages((prev) => (prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]));
-          if (payload.new.sender_type === "admin") {
+          if (payload.new.sender_type !== "customer") {
             audioRef.current?.play().catch(() => {});
             if (!open) {
               setUnread((u) => u + 1);
-              toast("💬 ข้อความใหม่จากร้าน", { description: payload.new.message });
+              const who = payload.new.sender_type === "bot" ? "🤖 บอท" : "💬 ร้าน";
+              toast(`${who} ตอบกลับ`, { description: payload.new.message?.slice(0, 80) });
             }
           }
         }
@@ -82,18 +86,23 @@ export function ChatWidget() {
     };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mark as read when chat opens
   useEffect(() => {
     if (open && unread > 0) {
       supabase
         .from("chat_messages")
         .update({ is_read: true })
         .eq("session_id", sessionId)
-        .eq("sender_type", "admin")
+        .neq("sender_type", "customer")
         .then(() => setUnread(0));
     }
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [open, messages, sessionId, unread]);
+
+  const callBot = (text: string, attachment_url?: string, attachment_type?: string) => {
+    supabase.functions.invoke("chat-bot-reply", {
+      body: { session_id: sessionId, message: text, attachment_url, attachment_type },
+    }).catch(() => {});
+  };
 
   const sendMessage = async () => {
     if (!newMsg.trim()) return;
@@ -111,10 +120,39 @@ export function ChatWidget() {
       customer_phone: customerPhone.trim(),
       customer_name: customerName.trim() || null,
     });
-    // Trigger bot auto-reply (no-op if disabled)
-    supabase.functions.invoke("chat-bot-reply", {
-      body: { session_id: sessionId, message: text },
-    }).catch(() => {});
+    callBot(text);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!customerPhone.trim()) {
+      setShowProfile(true);
+      return toast("กรอกเบอร์โทรก่อนแนบไฟล์");
+    }
+    try {
+      setUploading(true);
+      const att = await uploadChatFile(file, sessionId);
+      if (!att) return;
+      const msg = att.type === "image" ? "📎 [แนบรูป] " + att.name : "📎 [แนบไฟล์] " + att.name;
+      await supabase.from("chat_messages").insert({
+        session_id: sessionId,
+        sender_type: "customer",
+        message: msg,
+        customer_phone: customerPhone.trim(),
+        customer_name: customerName.trim() || null,
+        attachment_url: att.url,
+        attachment_type: att.type,
+        attachment_name: att.name,
+      });
+      callBot(msg, att.url, att.type);
+      toast.success("ส่งไฟล์แล้ว");
+    } catch (err: any) {
+      toast.error(err.message || "อัพโหลดไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const saveProfile = () => {
@@ -155,21 +193,16 @@ export function ChatWidget() {
 
   const handleEnableNotif = async () => {
     const ok = await subscribe();
-    if (ok) toast.success("เปิดการแจ้งเตือนแล้ว 🔔 จะได้รับเสียงแม้ปิดหน้านี้");
+    if (ok) toast.success("เปิดการแจ้งเตือนแล้ว 🔔");
     else toast.error("ไม่สามารถเปิดการแจ้งเตือนได้");
   };
 
-  // Auto-prompt push notification once after first message
   useEffect(() => {
     if (open && isSupported && !isSubscribed && messages.length > 0 && customerPhone) {
       const asked = localStorage.getItem("push_notif_asked");
       if (!asked) {
         localStorage.setItem("push_notif_asked", "1");
-        setTimeout(() => {
-          subscribe().then((ok) => {
-            if (ok) toast.success("เปิดแจ้งเตือนแล้ว 🔔 จะได้ยินเสียงแม้ปิดหน้านี้");
-          });
-        }, 1500);
+        setTimeout(() => { subscribe().catch(() => {}); }, 1500);
       }
     }
   }, [open, isSupported, isSubscribed, messages.length, customerPhone, subscribe]);
@@ -201,88 +234,50 @@ export function ChatWidget() {
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
-                onClick={() => setShowRecover(true)}
-                title="ดูแชทเก่าด้วยเบอร์โทร"
-              >
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
+                onClick={() => setShowRecover(true)} title="แชทเก่า">
                 <History className="h-4 w-4" />
               </Button>
               {isSupported && !isSubscribed && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
-                  onClick={handleEnableNotif}
-                  title="เปิดการแจ้งเตือน"
-                >
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
+                  onClick={handleEnableNotif} title="เปิดแจ้งเตือน">
                   <BellOff className="h-4 w-4" />
                 </Button>
               )}
               {isSubscribed && <Bell className="h-4 w-4 mx-2" />}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
-                onClick={() => setOpen(false)}
-              >
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
+                onClick={() => setOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          {/* Profile form (first-time or when phone missing) */}
           {showProfile && (
             <div className="p-4 bg-muted/30 border-b border-border space-y-3">
-              <p className="text-xs text-muted-foreground">
-                กรอกข้อมูลเพื่อให้ทางร้านติดต่อกลับ และดูแชทเก่าได้ในอนาคต
-              </p>
+              <p className="text-xs text-muted-foreground">กรอกข้อมูลเพื่อให้ทางร้านติดต่อกลับ</p>
               <div className="space-y-1">
                 <Label className="text-xs">ชื่อ (ไม่บังคับ)</Label>
-                <Input
-                  className="rounded-xl text-sm h-9"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="ชื่อของคุณ"
-                />
+                <Input className="rounded-xl text-sm h-9" value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)} placeholder="ชื่อของคุณ" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">เบอร์โทร *</Label>
-                <Input
-                  className="rounded-xl text-sm h-9"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="0xx-xxx-xxxx"
-                  inputMode="tel"
-                />
+                <Input className="rounded-xl text-sm h-9" value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)} placeholder="0xx-xxx-xxxx" inputMode="tel" />
               </div>
-              <Button size="sm" className="w-full rounded-xl" onClick={saveProfile}>
-                บันทึก & เริ่มแชท
-              </Button>
+              <Button size="sm" className="w-full rounded-xl" onClick={saveProfile}>บันทึก & เริ่มแชท</Button>
             </div>
           )}
 
-          {/* Recover dialog */}
           {showRecover && (
             <div className="p-4 bg-muted/30 border-b border-border space-y-3">
-              <p className="text-xs text-muted-foreground">
-                กรอกเบอร์โทรเดิมเพื่อกู้คืนแชทเก่าจากอุปกรณ์อื่น
-              </p>
-              <Input
-                className="rounded-xl text-sm h-9"
-                value={recoverPhone}
-                onChange={(e) => setRecoverPhone(e.target.value)}
-                placeholder="0xx-xxx-xxxx"
-                inputMode="tel"
-              />
+              <p className="text-xs text-muted-foreground">กรอกเบอร์โทรเดิมเพื่อกู้คืนแชทเก่า</p>
+              <Input className="rounded-xl text-sm h-9" value={recoverPhone}
+                onChange={(e) => setRecoverPhone(e.target.value)} placeholder="0xx-xxx-xxxx" inputMode="tel" />
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setShowRecover(false)}>
-                  ยกเลิก
-                </Button>
+                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setShowRecover(false)}>ยกเลิก</Button>
                 <Button size="sm" className="flex-1 rounded-xl" onClick={recoverByPhone} disabled={recovering}>
-                  {recovering ? "กำลังค้นหา..." : "กู้คืนแชท"}
+                  {recovering ? "กำลังค้นหา..." : "กู้คืน"}
                 </Button>
               </div>
             </div>
@@ -290,37 +285,43 @@ export function ChatWidget() {
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/20">
             {messages.length === 0 && !showProfile && (
-              <p className="text-center text-xs text-muted-foreground pt-12">
-                สวัสดีค่ะ! มีอะไรให้ช่วยไหม 🌾
-              </p>
+              <p className="text-center text-xs text-muted-foreground pt-12">สวัสดีค่ะ! มีอะไรให้ช่วยไหม 🌾</p>
             )}
-            {messages.map((m: any) => (
-              <div key={m.id} className={`flex ${m.sender_type === "customer" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${
-                    m.sender_type === "customer"
+            {messages.map((m: any) => {
+              const isCustomer = m.sender_type === "customer";
+              const isBot = m.sender_type === "bot";
+              return (
+                <div key={m.id} className={`flex ${isCustomer ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[78%] px-3 py-2 rounded-2xl text-sm ${
+                    isCustomer
                       ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-card text-foreground rounded-bl-md border border-border"
-                  }`}
-                >
-                  {m.message}
-                  <p className={`text-[10px] mt-1 opacity-70`}>
-                    {new Date(m.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                  </p>
+                      : isBot
+                        ? "bg-accent/40 text-foreground rounded-bl-md border border-accent"
+                        : "bg-card text-foreground rounded-bl-md border border-border"
+                  }`}>
+                    {isBot && <p className="text-[10px] font-semibold opacity-70 mb-0.5">🤖 บอท</p>}
+                    {m.message && <p className="whitespace-pre-wrap">{m.message}</p>}
+                    {m.attachment_url && (
+                      <ChatAttachmentView url={m.attachment_url} type={m.attachment_type} name={m.attachment_name} />
+                    )}
+                    <p className="text-[10px] mt-1 opacity-70">
+                      {new Date(m.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
 
-          <div className="p-3 border-t border-border flex gap-2 bg-card">
-            <Input
-              className="rounded-xl flex-1 text-sm"
-              placeholder="พิมพ์ข้อความ..."
-              value={newMsg}
-              onChange={(e) => setNewMsg(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            />
+          <div className="p-3 border-t border-border flex gap-2 bg-card items-center">
+            <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileSelect} />
+            <Button size="icon" variant="ghost" className="rounded-xl shrink-0" onClick={() => fileInputRef.current?.click()}
+              disabled={uploading} title="แนบรูป/ไฟล์">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </Button>
+            <Input className="rounded-xl flex-1 text-sm" placeholder="พิมพ์ข้อความ..." value={newMsg}
+              onChange={(e) => setNewMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} />
             <Button size="icon" className="rounded-xl shrink-0" onClick={sendMessage}>
               <Send className="h-4 w-4" />
             </Button>
