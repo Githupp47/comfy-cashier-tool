@@ -142,6 +142,7 @@ export type Database = {
           product_id: string
           product_name: string
           quantity: number
+          toppings: Json
         }
         Insert: {
           created_at?: string
@@ -151,6 +152,7 @@ export type Database = {
           product_id: string
           product_name: string
           quantity?: number
+          toppings?: Json
         }
         Update: {
           created_at?: string
@@ -160,6 +162,7 @@ export type Database = {
           product_id?: string
           product_name?: string
           quantity?: number
+          toppings?: Json
         }
         Relationships: [
           {
@@ -353,6 +356,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      toppings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_available: boolean
+          name: string
+          price: number
+          sort_order: number
+          stock_quantity: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_available?: boolean
+          name: string
+          price?: number
+          sort_order?: number
+          stock_quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_available?: boolean
+          name?: string
+          price?: number
+          sort_order?: number
+          stock_quantity?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
