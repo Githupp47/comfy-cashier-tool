@@ -249,6 +249,86 @@ serve(async (req) => {
           if (args.product_name) q = q.ilike("name", `%${args.product_name}%`);
           const { data: prods } = await q;
           result = { stock: prods ?? [] };
+        } else if (name === "get_toppings") {
+          const { data: tops } = await (supabase.from as any)("toppings")
+            .select("id, name, price, stock_quantity, is_available")
+            .eq("is_available", true);
+          result = { toppings: tops ?? [] };
+        } else if (name === "create_order") {
+          try {
+            // Resolve products by name
+            const resolvedItems: any[] = [];
+            let subtotal = 0;
+            const missing: string[] = [];
+            for (const it of (args.items ?? [])) {
+              const { data: p } = await supabase
+                .from("products")
+                .select("id, name, price, stock_quantity, is_available")
+                .ilike("name", `%${it.product_name}%`)
+                .maybeSingle();
+              if (!p || !p.is_available) { missing.push(it.product_name); continue; }
+              const qty = Math.max(1, Number(it.quantity) || 1);
+              if ((p.stock_quantity ?? 0) < qty) {
+                result = { ok: false, error: `สต็อก ${p.name} เหลือ ${p.stock_quantity} ไม่พอ` };
+                break;
+              }
+              resolvedItems.push({ product_id: p.id, product_name: p.name, price: Number(p.price), quantity: qty });
+              subtotal += Number(p.price) * qty;
+            }
+            if (missing.length > 0 && resolvedItems.length === 0) {
+              result = { ok: false, error: `ไม่พบสินค้า: ${missing.join(", ")}` };
+            } else if (!result.error && resolvedItems.length > 0) {
+              // Resolve toppings
+              const resolvedToppings: any[] = [];
+              let topTotal = 0;
+              for (const t of (args.toppings ?? [])) {
+                const { data: tp } = await (supabase.from as any)("toppings")
+                  .select("id, name, price, stock_quantity, is_available")
+                  .ilike("name", `%${t.name}%`)
+                  .maybeSingle();
+                if (!tp || !tp.is_available) continue;
+                const tq = Math.max(1, Number(t.quantity) || 1);
+                resolvedToppings.push({ id: tp.id, name: tp.name, price: Number(tp.price), quantity: tq });
+                topTotal += Number(tp.price) * tq;
+              }
+              const total = subtotal + topTotal;
+              const { data: order, error: oErr } = await supabase
+                .from("orders")
+                .insert({
+                  customer_name: args.customer_name,
+                  customer_phone: args.customer_phone,
+                  dormitory_map_link: args.address || null,
+                  note: args.note || "สั่งผ่านแชทบอท",
+                  total_amount: total,
+                  status: "pending",
+                })
+                .select().single();
+              if (oErr) throw oErr;
+              const rows: any[] = resolvedItems.map((i) => ({ order_id: order.id, ...i, toppings: [] }));
+              if (resolvedToppings.length > 0) {
+                rows.push({
+                  order_id: order.id,
+                  product_id: null,
+                  product_name: "ท็อปปิ้ง: " + resolvedToppings.map((t) => `${t.name} x${t.quantity}`).join(", "),
+                  price: topTotal,
+                  quantity: 1,
+                  toppings: resolvedToppings,
+                });
+              }
+              const { error: iErr } = await supabase.from("order_items").insert(rows);
+              if (iErr) throw iErr;
+              result = {
+                ok: true,
+                order_id: order.id,
+                short_id: order.id.slice(0, 8),
+                total_baht: total,
+                items: resolvedItems.length,
+                missing,
+              };
+            }
+          } catch (e: any) {
+            result = { ok: false, error: e.message };
+          }
         }
 
         aiMessages.push({
