@@ -89,21 +89,33 @@ export default function Checkout() {
           dormitory_map_link: mapLink.trim() || null,
           note: note.trim() || null,
           slip_url: urlData.publicUrl,
-          total_amount: totalAmount,
+          total_amount: grandTotal,
           status: "pending",
         })
         .select()
         .single();
       if (orderErr) throw orderErr;
 
-      // Create order items
-      const orderItems = items.map((i) => ({
+      // Create order items (one row per product)
+      const orderItems: any[] = items.map((i) => ({
         order_id: order.id,
         product_id: i.product.id,
         product_name: i.product.name,
         price: Number(i.product.price),
         quantity: i.quantity,
+        toppings: [],
       }));
+      // Append a single order_item carrying the toppings (so trigger decrements stock)
+      if (selectedToppings.length > 0) {
+        orderItems.push({
+          order_id: order.id,
+          product_id: null,
+          product_name: "ท็อปปิ้ง: " + selectedToppings.map((t) => `${t.name} x${t.quantity}`).join(", "),
+          price: toppingTotal,
+          quantity: 1,
+          toppings: selectedToppings,
+        });
+      }
       const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
       if (itemsErr) throw itemsErr;
 
@@ -159,12 +171,60 @@ export default function Checkout() {
                     </div>
                   </div>
                 ))}
-                <div className="border-t border-border pt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">ยอดรวม</span>
-                  <span className="text-2xl font-bold text-primary">฿{totalAmount.toLocaleString()}</span>
+                <div className="border-t border-border pt-3 space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">สินค้า</span>
+                    <span className="font-medium">฿{totalAmount.toLocaleString()}</span>
+                  </div>
+                  {toppingTotal > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">ท็อปปิ้ง</span>
+                      <span className="font-medium">฿{toppingTotal.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-sm text-muted-foreground">ยอดรวมทั้งหมด</span>
+                    <span className="text-2xl font-bold text-primary">฿{grandTotal.toLocaleString()}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Toppings */}
+            {toppings.length > 0 && (
+              <Card className="border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" /> เพิ่มท็อปปิ้ง
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {toppings.map((t) => {
+                    const qty = toppingQty[t.id] ?? 0;
+                    const outOfStock = t.stock_quantity <= 0;
+                    return (
+                      <div key={t.id} className={`flex items-center gap-3 p-2 rounded-xl ${outOfStock ? "opacity-50" : "hover:bg-muted/40"}`}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{t.name}</p>
+                          <p className="text-xs text-muted-foreground">+฿{Number(t.price).toLocaleString()} {outOfStock && "· หมด"}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="outline" className="h-7 w-7 rounded-full" disabled={qty === 0}
+                            onClick={() => setToppingQty((p) => ({ ...p, [t.id]: Math.max(0, qty - 1) }))}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm font-bold w-6 text-center">{qty}</span>
+                          <Button size="icon" variant="outline" className="h-7 w-7 rounded-full" disabled={outOfStock || qty >= t.stock_quantity}
+                            onClick={() => setToppingQty((p) => ({ ...p, [t.id]: qty + 1 }))}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Customer info */}
             <Card className="border-border">
@@ -200,7 +260,7 @@ export default function Checkout() {
                 <div className="bg-muted/30 rounded-xl p-4 border border-border/50 text-center">
                   <p className="text-xs text-muted-foreground mb-2">สแกน QR Code เพื่อชำระเงิน</p>
                   <img src={qrUrl} alt="QR Code" className="h-48 mx-auto rounded-lg object-contain bg-card" />
-                  <p className="text-2xl font-bold text-primary mt-3">฿{totalAmount.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-primary mt-3">฿{grandTotal.toLocaleString()}</p>
                 </div>
                 <div className="bg-accent/30 rounded-xl p-3 space-y-1 text-sm">
                   <p className="text-muted-foreground text-xs">หรือโอนเข้าบัญชี</p>
@@ -229,7 +289,7 @@ export default function Checkout() {
               onClick={handleSubmit}
               disabled={submitting}
             >
-              {submitting ? "กำลังส่งคำสั่งซื้อ..." : `✨ ยืนยันสั่งซื้อ ฿${totalAmount.toLocaleString()}`}
+              {submitting ? "กำลังส่งคำสั่งซื้อ..." : `✨ ยืนยันสั่งซื้อ ฿${grandTotal.toLocaleString()}`}
             </Button>
           </>
         )}
