@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCart } from "@/contexts/CartContext";
-import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check } from "lucide-react";
+import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check, Sparkles, Plus, Minus } from "lucide-react";
 import { toast } from "sonner";
 import qrFallback from "@/assets/qr-payment.jpg";
+
+type Topping = { id: string; name: string; price: number; stock_quantity: number; is_available: boolean };
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -23,6 +25,25 @@ export default function Checkout() {
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [toppingQty, setToppingQty] = useState<Record<string, number>>({});
+
+  const { data: toppings = [] } = useQuery({
+    queryKey: ["toppings"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("toppings")
+        .select("*").eq("is_available", true).order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as Topping[];
+    },
+  });
+
+  const selectedToppings = useMemo(
+    () => toppings.filter((t) => (toppingQty[t.id] ?? 0) > 0)
+      .map((t) => ({ id: t.id, name: t.name, price: Number(t.price), quantity: toppingQty[t.id] })),
+    [toppings, toppingQty]
+  );
+  const toppingTotal = selectedToppings.reduce((s, t) => s + t.price * t.quantity, 0);
+  const grandTotal = totalAmount + toppingTotal;
 
   const { data: settings } = useQuery({
     queryKey: ["shop-settings-checkout"],
