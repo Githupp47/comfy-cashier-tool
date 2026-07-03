@@ -346,6 +346,7 @@ export function MessagingIntegrations() {
               <li>Subscribe เพจกับ webhook แล้วทักลองเลย</li>
             </ol>
           </div>
+          <Tester platform="facebook" accent="text-[#1877F2]" />
         </CardContent>
       </Card>
 
