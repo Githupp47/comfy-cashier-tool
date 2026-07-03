@@ -204,6 +204,45 @@ export function MessagingIntegrations() {
         </div>
       </div>
 
+
+      {/* Teach the bot */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <div>
+              <Label className="text-sm font-bold">สอนบอท (Quick Teach)</Label>
+              <p className="text-xs text-muted-foreground">
+                พิมพ์กฎ/ข้อมูล 1 บรรทัด — บอทจะจำและใช้ในทุกช่องทางทันที
+              </p>
+            </div>
+          </div>
+          <Textarea
+            className="rounded-xl text-sm min-h-[70px]"
+            placeholder={`เช่น: ร้านเปิด 9:00-20:00 ทุกวัน หยุดวันจันทร์\nส่งฟรีเมื่อสั่งครบ 300 บาท\nโปรวันเกิดลด 15%`}
+            value={teachInput}
+            onChange={(e) => setTeachInput(e.target.value)}
+          />
+          <Button onClick={teachBot} disabled={teaching} className="rounded-xl h-10 gap-2">
+            <Sparkles className="h-4 w-4" /> {teaching ? "กำลังสอน..." : "สอนบอท"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Web widget tester */}
+      <Card className="border-border">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <div>
+              <Label className="text-sm font-medium">ทดสอบบอทหน้าเว็บ</Label>
+              <p className="text-xs text-muted-foreground">ลองส่งข้อความและดูบอทตอบทันที (ไม่ต้องเปิด LINE/FB)</p>
+            </div>
+          </div>
+          <Tester platform="web" accent="text-primary" />
+        </CardContent>
+      </Card>
+
       {/* LINE */}
       <Card className="border-border">
         <CardContent className="p-5 space-y-4">
