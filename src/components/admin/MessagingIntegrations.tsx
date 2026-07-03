@@ -405,6 +405,7 @@ export function MessagingIntegrations() {
               ⚠️ ต้องเปิด "บอทตอบแชทอัตโนมัติ" ในแท็บ <b>บอท</b> ด้วย บอทจึงจะตอบ
             </p>
           </div>
+          <Tester platform="instagram" accent="text-[#E4405F]" />
         </CardContent>
       </Card>
     </div>
