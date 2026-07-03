@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plug, Save, Copy, ExternalLink, MessageCircle, Facebook, Instagram } from "lucide-react";
+import { Plug, Save, Copy, ExternalLink, MessageCircle, Facebook, Instagram, Send, Sparkles, Bot } from "lucide-react";
 import { toast } from "sonner";
 import brandLogo from "@/assets/brand-logo.png";
 
@@ -29,6 +30,20 @@ export function MessagingIntegrations() {
   const [ig, setIg] = useState<Row>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+
+  // Tester state: input text + last reply per platform
+  const [testInput, setTestInput] = useState<Record<string, string>>({
+    web: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+    line: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+    facebook: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+    instagram: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+  });
+  const [testReply, setTestReply] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
+
+  // Teach-bot state
+  const [teachInput, setTeachInput] = useState("");
+  const [teaching, setTeaching] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -77,6 +92,101 @@ export function MessagingIntegrations() {
     toast.success("คัดลอกแล้ว");
   };
 
+  const runTest = async (platform: "web" | "line" | "facebook" | "instagram") => {
+    const msg = (testInput[platform] || "").trim();
+    if (!msg) return toast.error("พิมพ์ข้อความก่อนนะคะ");
+    setTesting(platform);
+    setTestReply((r) => ({ ...r, [platform]: "" }));
+    const sessionId =
+      platform === "web"
+        ? `test-web-${Date.now()}`
+        : `${platform}:test-${Date.now()}`;
+    try {
+      // Insert customer message so bot has full context
+      await supabase.from("chat_messages").insert({
+        session_id: sessionId,
+        sender_type: "customer",
+        message: msg,
+        platform,
+        customer_name: "🧪 ทดสอบ",
+      });
+      const { data, error } = await supabase.functions.invoke("chat-bot-reply", {
+        body: { session_id: sessionId, message: msg },
+      });
+      if (error) throw error;
+      if ((data as any)?.skipped) {
+        setTestReply((r) => ({
+          ...r,
+          [platform]: "⚠️ บอทถูกปิดอยู่ — เปิดที่แท็บ \"บอท\" ก่อนนะคะ",
+        }));
+      } else {
+        setTestReply((r) => ({
+          ...r,
+          [platform]: (data as any)?.reply || "(บอทไม่ตอบ)",
+        }));
+      }
+    } catch (e: any) {
+      setTestReply((r) => ({ ...r, [platform]: `❌ ${e.message}` }));
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const teachBot = async () => {
+    const rule = teachInput.trim();
+    if (!rule) return toast.error("พิมพ์สิ่งที่อยากสอนบอทก่อนนะคะ");
+    setTeaching(true);
+    const { data: cur } = await supabase
+      .from("chat_bot_settings").select("*").limit(1).maybeSingle();
+    const prev = cur?.system_prompt || "";
+    const marker = "\n\n📚 ความรู้เพิ่มเติมจากแอดมิน:";
+    let next: string;
+    if (prev.includes(marker)) {
+      next = prev + `\n- ${rule}`;
+    } else {
+      next = prev + `${marker}\n- ${rule}`;
+    }
+    const { error } = cur?.id
+      ? await supabase.from("chat_bot_settings").update({ system_prompt: next }).eq("id", cur.id)
+      : await supabase.from("chat_bot_settings").insert({ system_prompt: next, enabled: true });
+    setTeaching(false);
+    if (error) return toast.error(error.message);
+    toast.success("สอนบอทเรียบร้อย บอทจะจำและใช้ในครั้งถัดไป ✨");
+    setTeachInput("");
+  };
+
+  const Tester = ({ platform, accent }: { platform: "web" | "line" | "facebook" | "instagram"; accent: string }) => (
+    <div className="rounded-xl border border-dashed border-border bg-background/50 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+        <Sparkles className={`h-3.5 w-3.5 ${accent}`} /> ทดสอบส่งข้อความให้บอทตอบ
+      </div>
+      <div className="flex gap-2">
+        <Input
+          className="rounded-lg text-sm h-9"
+          placeholder="พิมพ์ข้อความลูกค้าตัวอย่าง..."
+          value={testInput[platform] ?? ""}
+          onChange={(e) => setTestInput((r) => ({ ...r, [platform]: e.target.value }))}
+          onKeyDown={(e) => e.key === "Enter" && runTest(platform)}
+        />
+        <Button
+          size="sm"
+          className="rounded-lg h-9 gap-1.5 shrink-0"
+          onClick={() => runTest(platform)}
+          disabled={testing === platform}
+        >
+          <Send className="h-3.5 w-3.5" />
+          {testing === platform ? "กำลังส่ง..." : "ส่ง"}
+        </Button>
+      </div>
+      {testReply[platform] && (
+        <div className="rounded-lg bg-muted p-3 text-sm whitespace-pre-wrap flex gap-2">
+          <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <span>{testReply[platform]}</span>
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) return <p className="text-sm text-muted-foreground">กำลังโหลด...</p>;
 
   return (
@@ -93,6 +203,45 @@ export function MessagingIntegrations() {
           </p>
         </div>
       </div>
+
+
+      {/* Teach the bot */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <div>
+              <Label className="text-sm font-bold">สอนบอท (Quick Teach)</Label>
+              <p className="text-xs text-muted-foreground">
+                พิมพ์กฎ/ข้อมูล 1 บรรทัด — บอทจะจำและใช้ในทุกช่องทางทันที
+              </p>
+            </div>
+          </div>
+          <Textarea
+            className="rounded-xl text-sm min-h-[70px]"
+            placeholder={`เช่น: ร้านเปิด 9:00-20:00 ทุกวัน หยุดวันจันทร์\nส่งฟรีเมื่อสั่งครบ 300 บาท\nโปรวันเกิดลด 15%`}
+            value={teachInput}
+            onChange={(e) => setTeachInput(e.target.value)}
+          />
+          <Button onClick={teachBot} disabled={teaching} className="rounded-xl h-10 gap-2">
+            <Sparkles className="h-4 w-4" /> {teaching ? "กำลังสอน..." : "สอนบอท"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Web widget tester */}
+      <Card className="border-border">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <div>
+              <Label className="text-sm font-medium">ทดสอบบอทหน้าเว็บ</Label>
+              <p className="text-xs text-muted-foreground">ลองส่งข้อความและดูบอทตอบทันที (ไม่ต้องเปิด LINE/FB)</p>
+            </div>
+          </div>
+          <Tester platform="web" accent="text-primary" />
+        </CardContent>
+      </Card>
 
       {/* LINE */}
       <Card className="border-border">
@@ -141,6 +290,7 @@ export function MessagingIntegrations() {
               <li>ปิด Auto-reply / Greeting messages เพื่อให้บอทตอบเอง</li>
             </ol>
           </div>
+          <Tester platform="line" accent="text-[#06C755]" />
         </CardContent>
       </Card>
 
@@ -196,6 +346,7 @@ export function MessagingIntegrations() {
               <li>Subscribe เพจกับ webhook แล้วทักลองเลย</li>
             </ol>
           </div>
+          <Tester platform="facebook" accent="text-[#1877F2]" />
         </CardContent>
       </Card>
 
@@ -254,6 +405,7 @@ export function MessagingIntegrations() {
               ⚠️ ต้องเปิด "บอทตอบแชทอัตโนมัติ" ในแท็บ <b>บอท</b> ด้วย บอทจึงจะตอบ
             </p>
           </div>
+          <Tester platform="instagram" accent="text-[#E4405F]" />
         </CardContent>
       </Card>
     </div>
