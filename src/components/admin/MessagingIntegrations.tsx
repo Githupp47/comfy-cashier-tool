@@ -290,6 +290,7 @@ export function MessagingIntegrations() {
               <li>ปิด Auto-reply / Greeting messages เพื่อให้บอทตอบเอง</li>
             </ol>
           </div>
+          <Tester platform="line" accent="text-[#06C755]" />
         </CardContent>
       </Card>
 
