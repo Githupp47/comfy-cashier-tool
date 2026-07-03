@@ -31,6 +31,20 @@ export function MessagingIntegrations() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
+  // Tester state: input text + last reply per platform
+  const [testInput, setTestInput] = useState<Record<string, string>>({
+    web: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+    line: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+    facebook: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+    instagram: "สวัสดีค่ะ มีอะไรขายบ้าง?",
+  });
+  const [testReply, setTestReply] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
+
+  // Teach-bot state
+  const [teachInput, setTeachInput] = useState("");
+  const [teaching, setTeaching] = useState(false);
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("messaging_integrations").select("*");
