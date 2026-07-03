@@ -92,6 +92,101 @@ export function MessagingIntegrations() {
     toast.success("คัดลอกแล้ว");
   };
 
+  const runTest = async (platform: "web" | "line" | "facebook" | "instagram") => {
+    const msg = (testInput[platform] || "").trim();
+    if (!msg) return toast.error("พิมพ์ข้อความก่อนนะคะ");
+    setTesting(platform);
+    setTestReply((r) => ({ ...r, [platform]: "" }));
+    const sessionId =
+      platform === "web"
+        ? `test-web-${Date.now()}`
+        : `${platform}:test-${Date.now()}`;
+    try {
+      // Insert customer message so bot has full context
+      await supabase.from("chat_messages").insert({
+        session_id: sessionId,
+        sender_type: "customer",
+        message: msg,
+        platform,
+        customer_name: "🧪 ทดสอบ",
+      });
+      const { data, error } = await supabase.functions.invoke("chat-bot-reply", {
+        body: { session_id: sessionId, message: msg },
+      });
+      if (error) throw error;
+      if ((data as any)?.skipped) {
+        setTestReply((r) => ({
+          ...r,
+          [platform]: "⚠️ บอทถูกปิดอยู่ — เปิดที่แท็บ \"บอท\" ก่อนนะคะ",
+        }));
+      } else {
+        setTestReply((r) => ({
+          ...r,
+          [platform]: (data as any)?.reply || "(บอทไม่ตอบ)",
+        }));
+      }
+    } catch (e: any) {
+      setTestReply((r) => ({ ...r, [platform]: `❌ ${e.message}` }));
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const teachBot = async () => {
+    const rule = teachInput.trim();
+    if (!rule) return toast.error("พิมพ์สิ่งที่อยากสอนบอทก่อนนะคะ");
+    setTeaching(true);
+    const { data: cur } = await supabase
+      .from("chat_bot_settings").select("*").limit(1).maybeSingle();
+    const prev = cur?.system_prompt || "";
+    const marker = "\n\n📚 ความรู้เพิ่มเติมจากแอดมิน:";
+    let next: string;
+    if (prev.includes(marker)) {
+      next = prev + `\n- ${rule}`;
+    } else {
+      next = prev + `${marker}\n- ${rule}`;
+    }
+    const { error } = cur?.id
+      ? await supabase.from("chat_bot_settings").update({ system_prompt: next }).eq("id", cur.id)
+      : await supabase.from("chat_bot_settings").insert({ system_prompt: next, enabled: true });
+    setTeaching(false);
+    if (error) return toast.error(error.message);
+    toast.success("สอนบอทเรียบร้อย บอทจะจำและใช้ในครั้งถัดไป ✨");
+    setTeachInput("");
+  };
+
+  const Tester = ({ platform, accent }: { platform: "web" | "line" | "facebook" | "instagram"; accent: string }) => (
+    <div className="rounded-xl border border-dashed border-border bg-background/50 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+        <Sparkles className={`h-3.5 w-3.5 ${accent}`} /> ทดสอบส่งข้อความให้บอทตอบ
+      </div>
+      <div className="flex gap-2">
+        <Input
+          className="rounded-lg text-sm h-9"
+          placeholder="พิมพ์ข้อความลูกค้าตัวอย่าง..."
+          value={testInput[platform] ?? ""}
+          onChange={(e) => setTestInput((r) => ({ ...r, [platform]: e.target.value }))}
+          onKeyDown={(e) => e.key === "Enter" && runTest(platform)}
+        />
+        <Button
+          size="sm"
+          className="rounded-lg h-9 gap-1.5 shrink-0"
+          onClick={() => runTest(platform)}
+          disabled={testing === platform}
+        >
+          <Send className="h-3.5 w-3.5" />
+          {testing === platform ? "กำลังส่ง..." : "ส่ง"}
+        </Button>
+      </div>
+      {testReply[platform] && (
+        <div className="rounded-lg bg-muted p-3 text-sm whitespace-pre-wrap flex gap-2">
+          <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <span>{testReply[platform]}</span>
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) return <p className="text-sm text-muted-foreground">กำลังโหลด...</p>;
 
   return (
