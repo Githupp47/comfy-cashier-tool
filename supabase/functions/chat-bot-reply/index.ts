@@ -383,14 +383,18 @@ serve(async (req) => {
       });
     }
 
-    // LINE push
-    if (platform === "line" && lineUserId) {
+    // Push to external messaging platform
+    if ((platform === "line" || platform === "facebook" || platform === "instagram") && lineUserId) {
       const { data: integ } = await supabase
         .from("messaging_integrations")
         .select("channel_access_token, enabled")
-        .eq("platform", "line").maybeSingle();
+        .eq("platform", platform).maybeSingle();
       if (integ?.enabled && integ.channel_access_token) {
-        await pushLineMessage(integ.channel_access_token, lineUserId, finalReply);
+        if (platform === "line") {
+          await pushLineMessage(integ.channel_access_token, lineUserId, finalReply);
+        } else {
+          await pushMetaMessage(integ.channel_access_token, lineUserId, finalReply, platform);
+        }
       }
     }
 
