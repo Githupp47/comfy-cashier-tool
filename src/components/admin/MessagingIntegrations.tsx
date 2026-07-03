@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plug, Save, Copy, ExternalLink, MessageCircle, Facebook, Instagram } from "lucide-react";
+import { Plug, Save, Copy, ExternalLink, MessageCircle, Facebook, Instagram, Send, Sparkles, Bot } from "lucide-react";
 import { toast } from "sonner";
 import brandLogo from "@/assets/brand-logo.png";
 
