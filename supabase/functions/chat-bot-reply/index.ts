@@ -7,19 +7,25 @@ const corsHeaders = {
 };
 
 const DEFAULT_PROMPT = `คุณเป็นพนักงานร้าน HAKKŌ ร้านข้าวไอติม & เชื้อโคจิ ตอบเป็นภาษาไทยสุภาพ เป็นกันเอง
-กฎสำคัญ:
-- ตอบสั้น กระชับ 1-3 บรรทัด ใช้ emoji เล็กน้อย
-- ใช้ bullet (•) เมื่อมีหลายข้อ
-- ห้ามตอบยาวเป็นย่อหน้ายาว
-- ถามสินค้า/ราคา → ใช้ tool get_products
-- อยากดูรูปสินค้า → ใช้ tool send_product_image
-- ถามท็อปปิ้ง → ใช้ tool get_toppings
-- ถามสต็อก → ใช้ tool check_stock
-- ถามยอดขาย (แอดมิน) → ใช้ tool get_sales_summary
-- เมื่อลูกค้าต้องการสั่งซื้อ ให้ถามชื่อ-เบอร์โทร-ที่อยู่จัดส่งให้ครบ แล้วใช้ tool create_order
-  เมื่อสร้างออเดอร์สำเร็จ บอกเลขออเดอร์ ยอดรวม และแจ้งให้โอนเงินตามช่องทางในหน้าเว็บ
-- ลูกค้าส่งสลิป → อ่านยอด/วันเวลา ยืนยันรับ บอกให้รอแอดมินตรวจ
-- ลูกค้าส่งรูปอื่น → ดูแล้วตอบตรงคำถาม`;
+
+🚫 ขอบเขตการตอบ (สำคัญมาก):
+- ตอบเฉพาะเรื่องของร้านเท่านั้น: สินค้า ราคา สต็อก ท็อปปิ้ง การสั่งซื้อ ชำระเงิน จัดส่ง โปรโมชั่น เวลาเปิด-ปิด
+- ถ้าลูกค้าถามเรื่องอื่น (ข่าว การเมือง สุขภาพ สูตรอาหาร ความรู้ทั่วไป การบ้าน โค้ด ฯลฯ) ให้ตอบสั้นๆ ว่า
+  "ขอโทษค่ะ ตอบได้เฉพาะเรื่องสินค้าและบริการของร้าน HAKKŌ นะคะ 🙏 มีอะไรให้ช่วยเกี่ยวกับข้าวไอติม/เชื้อโคจิมั้ยคะ?"
+- ห้ามให้คำแนะนำ ห้ามเล่าเรื่อง ห้ามแต่งเนื้อหานอกเหนือจากร้าน
+
+✍️ รูปแบบการตอบ:
+- สั้น กระชับ 1-3 บรรทัดเท่านั้น ใช้ emoji เล็กน้อย
+- ใช้ bullet (•) เมื่อมีหลายข้อ ห้ามตอบยาวเป็นย่อหน้า
+
+🛠️ เครื่องมือ:
+- ถามสินค้า/ราคา → get_products
+- ดูรูปสินค้า → send_product_image
+- ท็อปปิ้ง → get_toppings
+- สต็อก → check_stock
+- ยอดขาย (แอดมิน) → get_sales_summary
+- สั่งซื้อ: ถามชื่อ-เบอร์-ที่อยู่ให้ครบ แล้ว create_order แจ้งเลขออเดอร์+ยอดรวม+ช่องทางโอนเงิน
+- ลูกค้าส่งสลิป → อ่านยอด/เวลา ยืนยันรับ บอกให้รอแอดมินตรวจ`;
 
 async function pushLineMessage(token: string, to: string, text: string) {
   await fetch("https://api.line.me/v2/bot/message/push", {
@@ -27,6 +33,19 @@ async function pushLineMessage(token: string, to: string, text: string) {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
   }).catch((e) => console.error("LINE push", e));
+}
+
+async function pushMetaMessage(token: string, recipientId: string, text: string, platform: string) {
+  const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(token)}`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      messaging_type: "RESPONSE",
+      message: { text },
+    }),
+  }).catch((e) => console.error(`${platform} push`, e));
 }
 
 const tools = [
@@ -148,8 +167,15 @@ serve(async (req) => {
 
     const reversed = (history ?? []).reverse();
     const last = (history ?? []).find((m: any) => m.line_user_id);
-    const platform = session_id.startsWith("line:") ? "line" : (last?.platform ?? "web");
-    const lineUserId = last?.line_user_id ?? (session_id.startsWith("line:") ? session_id.slice(5) : null);
+    let platform: string = last?.platform ?? "web";
+    let lineUserId: string | null = last?.line_user_id ?? null;
+    for (const prefix of ["line:", "facebook:", "instagram:"]) {
+      if (session_id.startsWith(prefix)) {
+        platform = prefix.slice(0, -1);
+        lineUserId = session_id.slice(prefix.length);
+        break;
+      }
+    }
 
     // Build messages with multimodal user content
     const systemPrompt = (settings.system_prompt || DEFAULT_PROMPT) + "\n\n" + DEFAULT_PROMPT;
@@ -364,14 +390,18 @@ serve(async (req) => {
       });
     }
 
-    // LINE push
-    if (platform === "line" && lineUserId) {
+    // Push to external messaging platform
+    if ((platform === "line" || platform === "facebook" || platform === "instagram") && lineUserId) {
       const { data: integ } = await supabase
         .from("messaging_integrations")
         .select("channel_access_token, enabled")
-        .eq("platform", "line").maybeSingle();
+        .eq("platform", platform).maybeSingle();
       if (integ?.enabled && integ.channel_access_token) {
-        await pushLineMessage(integ.channel_access_token, lineUserId, finalReply);
+        if (platform === "line") {
+          await pushLineMessage(integ.channel_access_token, lineUserId, finalReply);
+        } else {
+          await pushMetaMessage(integ.channel_access_token, lineUserId, finalReply, platform);
+        }
       }
     }
 
