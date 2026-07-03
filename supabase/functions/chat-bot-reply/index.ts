@@ -167,8 +167,15 @@ serve(async (req) => {
 
     const reversed = (history ?? []).reverse();
     const last = (history ?? []).find((m: any) => m.line_user_id);
-    const platform = session_id.startsWith("line:") ? "line" : (last?.platform ?? "web");
-    const lineUserId = last?.line_user_id ?? (session_id.startsWith("line:") ? session_id.slice(5) : null);
+    let platform: string = last?.platform ?? "web";
+    let lineUserId: string | null = last?.line_user_id ?? null;
+    for (const prefix of ["line:", "facebook:", "instagram:"]) {
+      if (session_id.startsWith(prefix)) {
+        platform = prefix.slice(0, -1);
+        lineUserId = session_id.slice(prefix.length);
+        break;
+      }
+    }
 
     // Build messages with multimodal user content
     const systemPrompt = (settings.system_prompt || DEFAULT_PROMPT) + "\n\n" + DEFAULT_PROMPT;
