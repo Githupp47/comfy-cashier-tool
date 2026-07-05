@@ -244,7 +244,78 @@ export function MessagingIntegrations() {
         </CardContent>
       </Card>
 
-      {/* LINE */}
+      {/* ManyChat One-Click FB/IG Bridge */}
+      <Card className="border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-500/5 to-blue-500/5">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center shrink-0">
+              <Sparkles className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <Label className="text-base font-bold">⚡ วิธีง่ายสุด: เชื่อม FB + IG ผ่าน ManyChat</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                คลิกเดียวเชื่อมเพจ FB/IG ไม่ต้องสร้าง Meta App ไม่ต้องรอรีวิว 🎉
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">🔗 Webhook URL สำหรับ ManyChat</Label>
+            <div className="flex gap-2">
+              <Input className="rounded-xl font-mono text-xs" value={MANYCHAT_WEBHOOK} readOnly />
+              <Button variant="outline" size="icon" className="rounded-xl shrink-0" onClick={() => copy(MANYCHAT_WEBHOOK)}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="bg-background rounded-xl p-4 text-xs space-y-3 leading-relaxed border border-border">
+            <p className="font-bold text-foreground text-sm">📘 วิธีตั้งค่า (5 นาที)</p>
+            <ol className="list-decimal pl-5 space-y-2 text-muted-foreground">
+              <li>
+                สมัครฟรีที่{" "}
+                <a href="https://manychat.com" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-1 font-medium">
+                  ManyChat.com <ExternalLink className="h-3 w-3" />
+                </a>{" "}
+                → กด <b>"Get Started"</b> → login ด้วย Facebook (คลิกเดียว) → เลือกเพจ FB/IG
+              </li>
+              <li>
+                ใน ManyChat → เมนู <b>Automation</b> → <b>New Flow</b> → เพิ่ม trigger <b>"Default Reply"</b> (บอทตอบทุกข้อความ)
+              </li>
+              <li>
+                เพิ่ม Action <b>"External Request"</b>:
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li>Method: <code className="bg-muted px-1.5 py-0.5 rounded text-[10px]">POST</code></li>
+                  <li>URL: วาง Webhook URL ด้านบน</li>
+                  <li>Body Type: <b>JSON</b></li>
+                  <li>
+                    Body:
+                    <pre className="bg-muted p-2 rounded mt-1 text-[10px] overflow-x-auto">
+{`{
+  "subscriber_id": "{{user_id}}",
+  "message": "{{last_input_text}}",
+  "platform": "facebook",
+  "name": "{{first_name}}"
+}`}
+                    </pre>
+                  </li>
+                  <li>Response Mapping: กด <b>"Test the Request"</b> → เลือก field <code className="bg-muted px-1.5 py-0.5 rounded text-[10px]">reply</code> → Save as <b>bot_reply</b></li>
+                </ul>
+              </li>
+              <li>เพิ่ม <b>"Send Message"</b> ต่อจาก External Request → เนื้อหาใส่ <code className="bg-muted px-1.5 py-0.5 rounded text-[10px]">{`{{bot_reply}}`}</code></li>
+              <li>กด <b>Publish</b> → ทักเพจตัวเองทดสอบเลย! 🎉</li>
+            </ol>
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 mt-2">
+              <p className="text-emerald-700 dark:text-emerald-400 font-medium text-xs">
+                ✅ ManyChat ฟรีถึง 1,000 contacts — พอสำหรับร้านส่วนใหญ่
+              </p>
+              <p className="text-emerald-700 dark:text-emerald-400 text-xs mt-1">
+                💡 สำหรับ IG: ในขั้นตอนที่ 3 เปลี่ยน <code className="bg-white/50 dark:bg-black/30 px-1 rounded">"platform": "instagram"</code>
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <Card className="border-border">
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center justify-between bg-[#06C755]/10 rounded-xl p-4">
