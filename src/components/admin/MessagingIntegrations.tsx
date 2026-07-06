@@ -14,7 +14,7 @@ const PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID || "mzdfpkfdkzlcjegn
 const LINE_WEBHOOK = `https://${PROJECT_ID}.supabase.co/functions/v1/line-webhook`;
 const FB_WEBHOOK = `https://${PROJECT_ID}.supabase.co/functions/v1/meta-webhook?platform=facebook`;
 const IG_WEBHOOK = `https://${PROJECT_ID}.supabase.co/functions/v1/meta-webhook?platform=instagram`;
-const MANYCHAT_WEBHOOK = `https://${PROJECT_ID}.supabase.co/functions/v1/manychat-webhook`;
+
 
 type Row = {
   id: string | null;
