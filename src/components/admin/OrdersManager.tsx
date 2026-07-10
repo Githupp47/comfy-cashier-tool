@@ -175,9 +175,64 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
                   </div>
 
                   {o.slip_url && (
-                    <a href={o.slip_url} target="_blank" rel="noopener noreferrer" className="block">
-                      <img src={o.slip_url} alt="สลิป" className="h-32 rounded-xl object-cover border border-border shadow-sm hover:shadow-md transition-shadow" />
-                    </a>
+                    <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-start gap-3">
+                        <a href={o.slip_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                          <img src={o.slip_url} alt="สลิป" className="h-28 w-28 rounded-lg object-cover border border-border" />
+                        </a>
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-medium text-muted-foreground">สลิปโอนเงิน</span>
+                            {o.slip_status === "approved" && <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">✅ อนุมัติแล้ว</span>}
+                            {o.slip_status === "rejected" && <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200">❌ ปฏิเสธ</span>}
+                            {(!o.slip_status || o.slip_status === "pending") && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">⏳ รอตรวจ</span>}
+                          </div>
+                          {o.slip_data ? (
+                            <div className="text-xs space-y-0.5 bg-background/60 rounded-lg p-2 border border-border/50">
+                              <div className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">ยอด:</span>
+                                <span className={`font-medium ${o.slip_data.amount_match ? "text-emerald-700" : "text-red-600"}`}>
+                                  ฿{o.slip_data.amount ?? "-"} {o.slip_data.amount_match ? "✓" : `≠ ฿${o.slip_data.expected_amount}`}
+                                </span>
+                              </div>
+                              {o.slip_data.date && <div className="flex justify-between gap-2"><span className="text-muted-foreground">วันที่:</span><span>{o.slip_data.date} {o.slip_data.time || ""}</span></div>}
+                              {o.slip_data.ref_no && <div className="flex justify-between gap-2"><span className="text-muted-foreground">อ้างอิง:</span><span className="font-mono truncate">{o.slip_data.ref_no}</span></div>}
+                              {o.slip_data.sender_name && <div className="flex justify-between gap-2"><span className="text-muted-foreground">จาก:</span><span className="truncate">{o.slip_data.sender_name} {o.slip_data.sender_bank ? `(${o.slip_data.sender_bank})` : ""}</span></div>}
+                              {o.slip_data.receiver_name && <div className="flex justify-between gap-2"><span className="text-muted-foreground">เข้า:</span><span className="truncate">{o.slip_data.receiver_name}</span></div>}
+                              {o.slip_data.is_slip === false && <div className="text-red-600 flex items-center gap-1 mt-1"><AlertTriangle className="h-3 w-3" /> รูปนี้อาจไม่ใช่สลิป</div>}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">ยังไม่ได้อ่านข้อมูลสลิป</p>
+                          )}
+                          {o.slip_status === "rejected" && o.slip_reject_reason && (
+                            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-1.5">เหตุผล: {o.slip_reject_reason}</p>
+                          )}
+                        </div>
+                      </div>
+                      {o.slip_status !== "approved" && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-8 text-xs" onClick={() => verifySlip(o.id)} disabled={verifyingId === o.id}>
+                            {verifyingId === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
+                            {o.slip_data ? "อ่านสลิปใหม่" : "อ่านสลิป (AI)"}
+                          </Button>
+                          <Button size="sm" className="rounded-xl gap-1.5 h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => approveSlip(o.id)}>
+                            <CheckCircle2 className="h-3.5 w-3.5" /> อนุมัติ
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => { setRejectingId(o.id); setRejectReason(""); }}>
+                            <XCircle className="h-3.5 w-3.5" /> ปฏิเสธ
+                          </Button>
+                        </div>
+                      )}
+                      {rejectingId === o.id && (
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                          <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="ระบุเหตุผลที่ปฏิเสธ (เช่น ยอดไม่ตรง, สลิปเบลอ, ปลายทางผิด)" className="text-xs rounded-lg min-h-[60px]" />
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="destructive" className="rounded-xl h-8 text-xs" onClick={() => rejectSlip(o.id)}>ยืนยันปฏิเสธ</Button>
+                            <Button size="sm" variant="ghost" className="rounded-xl h-8 text-xs" onClick={() => setRejectingId(null)}>ยกเลิก</Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   <Separator />
