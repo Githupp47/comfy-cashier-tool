@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Package, ShoppingBag, Clock, CheckCircle2,
-  MapPin, MessageSquare, Eye, EyeOff, Trash2
+  Package, ShoppingBag, Clock, CheckCircle2, XCircle,
+  MapPin, MessageSquare, Eye, EyeOff, Trash2, ScanLine, Loader2, AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
 
-type Order = Tables<"orders">;
+type Order = Tables<"orders"> & { slip_status?: string | null; slip_data?: any; slip_reject_reason?: string | null };
 
 export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: any }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
