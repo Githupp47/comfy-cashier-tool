@@ -119,8 +119,14 @@ export default function Checkout() {
       const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
       if (itemsErr) throw itemsErr;
 
+      // Auto-verify slip (fire-and-forget, bot approves if amount matches)
+      const chatSession = localStorage.getItem("chat_session_id") || undefined;
+      supabase.functions.invoke("verify-slip", {
+        body: { order_id: order.id, session_id: chatSession, auto: true },
+      }).catch(() => {});
+
       clearCart();
-      toast.success("สั่งซื้อสำเร็จ! 🎉");
+      toast.success("สั่งซื้อสำเร็จ! บอทกำลังตรวจสลิป 🤖");
       navigate(`/track?phone=${encodeURIComponent(phone.trim())}`);
     } catch (err: any) {
       toast.error("เกิดข้อผิดพลาด: " + err.message);
