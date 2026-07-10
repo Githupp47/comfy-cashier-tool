@@ -220,12 +220,18 @@ export default function Admin() {
             <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setSoundEnabled(!soundEnabled)} title={soundEnabled ? "ปิดเสียง" : "เปิดเสียง"}>
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
             </Button>
-            {pendingOrders > 0 && (
-              <div className="relative">
-                <BellRing className="h-5 w-5 text-primary animate-pulse" />
-                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1">{pendingOrders}</span>
-              </div>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full relative"
+              onClick={() => setActiveTab("orders")}
+              title={pendingOrders > 0 ? `${pendingOrders} ออเดอร์รอตรวจสอบ` : "ไม่มีออเดอร์รอ"}
+            >
+              <BellRing className={`h-5 w-5 ${pendingOrders > 0 ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
+              {pendingOrders > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1 font-bold">{pendingOrders}</span>
+              )}
+            </Button>
             <Button variant="outline" size="sm" onClick={handleLogout} className="rounded-full gap-2 ml-2">
               <LogOut className="h-4 w-4" /> ออก
             </Button>
