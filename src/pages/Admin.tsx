@@ -82,13 +82,34 @@ export default function Admin() {
   useEffect(() => {
     if (!session) return;
     const channel = supabase
+      .channel("admin-new-orders")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, () => {
+        playBeep();
+        toast("🔔 ออเดอร์ใหม่เข้ามาแล้ว!", { description: "กดที่แท็บออเดอร์เพื่อตรวจสอบ", duration: 8000 });
+        queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload: any) => {
+        const n = payload.new, o = payload.old;
+        if (n.slip_status !== o.slip_status && (n.slip_status === "needs_review" || n.slip_status === "rejected")) {
+          playBeep();
+          toast.warning(`⚠️ สลิปต้องตรวจสอบ: ${n.customer_name}`, {
+            description: n.slip_reject_reason || "กรุณาเข้าไปดูในแท็บออเดอร์",
+            duration: 10000,
+          });
+          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session, queryClient, soundEnabled]);
+
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
       .channel("admin-chat-notify")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload: any) => {
         if (payload.new?.sender_type === "customer") {
-          if (soundEnabled && audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(() => {});
-          }
+          playBeep();
           toast("💬 มีข้อความใหม่จากลูกค้า!", { duration: 5000 });
           queryClient.invalidateQueries({ queryKey: ["admin-chats"] });
         }
