@@ -18,6 +18,57 @@ type Order = Tables<"orders"> & { slip_status?: string | null; slip_data?: any; 
 export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryClient: any }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const verifySlip = async (orderId: string) => {
+    setVerifyingId(orderId);
+    try {
+      const { data, error } = await supabase.functions.invoke("verify-slip", { body: { order_id: orderId } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      toast.success("อ่านสลิปสำเร็จ");
+    } catch (e: any) {
+      toast.error(e.message || "อ่านสลิปไม่สำเร็จ");
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
+  const approveSlip = async (orderId: string) => {
+    const { error } = await supabase.from("orders").update({
+      slip_status: "approved",
+      slip_verified_at: new Date().toISOString(),
+      status: "confirmed",
+    } as any).eq("id", orderId);
+    if (error) return toast.error(error.message);
+    await supabase.from("chat_messages").insert({
+      order_id: orderId, sender_type: "admin",
+      message: "✅ ยืนยันการชำระเงินเรียบร้อยค่ะ กำลังเตรียมออเดอร์ให้นะคะ 🙏",
+    });
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    toast.success("อนุมัติสลิปแล้ว");
+  };
+
+  const rejectSlip = async (orderId: string) => {
+    if (!rejectReason.trim()) return toast.error("กรุณาระบุเหตุผล");
+    const { error } = await supabase.from("orders").update({
+      slip_status: "rejected",
+      slip_reject_reason: rejectReason,
+      slip_verified_at: new Date().toISOString(),
+    } as any).eq("id", orderId);
+    if (error) return toast.error(error.message);
+    await supabase.from("chat_messages").insert({
+      order_id: orderId, sender_type: "admin",
+      message: `❌ สลิปไม่ผ่านการตรวจสอบ: ${rejectReason}\nกรุณาส่งสลิปใหม่อีกครั้งค่ะ 🙏`,
+    });
+    setRejectingId(null); setRejectReason("");
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    toast.success("ปฏิเสธสลิปแล้ว");
+  };
+
 
   const { data: orderItems } = useQuery({
     queryKey: ["order-items", selectedOrder?.id],
