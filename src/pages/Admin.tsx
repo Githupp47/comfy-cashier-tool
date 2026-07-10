@@ -33,7 +33,16 @@ export default function Admin() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("orders");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playBeep = () => {
+    if (!soundEnabled) return;
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     audioRef.current = new Audio("/notification.wav");
