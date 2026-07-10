@@ -183,9 +183,10 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
                         <div className="flex-1 min-w-0 space-y-1.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-medium text-muted-foreground">สลิปโอนเงิน</span>
-                            {o.slip_status === "approved" && <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">✅ อนุมัติแล้ว</span>}
+                            {o.slip_status === "approved" && <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">✅ อนุมัติอัตโนมัติ</span>}
                             {o.slip_status === "rejected" && <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200">❌ ปฏิเสธ</span>}
-                            {(!o.slip_status || o.slip_status === "pending") && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">⏳ รอตรวจ</span>}
+                            {o.slip_status === "needs_review" && <span className="text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full border border-orange-200 animate-pulse">⚠️ ต้องตรวจ</span>}
+                            {(!o.slip_status || o.slip_status === "pending") && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">⏳ กำลังตรวจ</span>}
                           </div>
                           {o.slip_data ? (
                             <div className="text-xs space-y-0.5 bg-background/60 rounded-lg p-2 border border-border/50">

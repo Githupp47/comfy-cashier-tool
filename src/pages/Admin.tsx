@@ -33,7 +33,16 @@ export default function Admin() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("orders");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playBeep = () => {
+    if (!soundEnabled) return;
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     audioRef.current = new Audio("/notification.wav");
@@ -54,17 +63,26 @@ export default function Admin() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+
   useEffect(() => {
     if (!session) return;
     const channel = supabase
       .channel("admin-new-orders")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, () => {
-        if (soundEnabled && audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {});
-        }
+        playBeep();
         toast("🔔 ออเดอร์ใหม่เข้ามาแล้ว!", { description: "กดที่แท็บออเดอร์เพื่อตรวจสอบ", duration: 8000 });
         queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload: any) => {
+        const n = payload.new, o = payload.old;
+        if (n.slip_status !== o.slip_status && (n.slip_status === "needs_review" || n.slip_status === "rejected")) {
+          playBeep();
+          toast.warning(`⚠️ สลิปต้องตรวจสอบ: ${n.customer_name}`, {
+            description: n.slip_reject_reason || "กรุณาเข้าไปดูในแท็บออเดอร์",
+            duration: 10000,
+          });
+          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -76,10 +94,7 @@ export default function Admin() {
       .channel("admin-chat-notify")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload: any) => {
         if (payload.new?.sender_type === "customer") {
-          if (soundEnabled && audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(() => {});
-          }
+          playBeep();
           toast("💬 มีข้อความใหม่จากลูกค้า!", { duration: 5000 });
           queryClient.invalidateQueries({ queryKey: ["admin-chats"] });
         }
@@ -205,12 +220,18 @@ export default function Admin() {
             <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setSoundEnabled(!soundEnabled)} title={soundEnabled ? "ปิดเสียง" : "เปิดเสียง"}>
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
             </Button>
-            {pendingOrders > 0 && (
-              <div className="relative">
-                <BellRing className="h-5 w-5 text-primary animate-pulse" />
-                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1">{pendingOrders}</span>
-              </div>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full relative"
+              onClick={() => setActiveTab("orders")}
+              title={pendingOrders > 0 ? `${pendingOrders} ออเดอร์รอตรวจสอบ` : "ไม่มีออเดอร์รอ"}
+            >
+              <BellRing className={`h-5 w-5 ${pendingOrders > 0 ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
+              {pendingOrders > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center px-1 font-bold">{pendingOrders}</span>
+              )}
+            </Button>
             <Button variant="outline" size="sm" onClick={handleLogout} className="rounded-full gap-2 ml-2">
               <LogOut className="h-4 w-4" /> ออก
             </Button>
@@ -291,7 +312,7 @@ export default function Admin() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="orders" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-card border border-border p-1 h-auto rounded-xl flex-wrap">
             <TabsTrigger value="orders" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <ShoppingBag className="h-4 w-4" /> ออเดอร์
