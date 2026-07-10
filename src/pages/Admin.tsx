@@ -63,21 +63,6 @@ export default function Admin() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  useEffect(() => {
-    if (!session) return;
-    const channel = supabase
-      .channel("admin-new-orders")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, () => {
-        if (soundEnabled && audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {});
-        }
-        toast("🔔 ออเดอร์ใหม่เข้ามาแล้ว!", { description: "กดที่แท็บออเดอร์เพื่อตรวจสอบ", duration: 8000 });
-        queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [session, queryClient, soundEnabled]);
 
   useEffect(() => {
     if (!session) return;
