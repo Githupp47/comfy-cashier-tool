@@ -24,6 +24,63 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [maxAgeHours, setMaxAgeHours] = useState<string>("24");
+  const [savingAge, setSavingAge] = useState(false);
+
+  useEffect(() => {
+    supabase.from("shop_settings").select("value").eq("key", "slip_max_age_hours").maybeSingle()
+      .then(({ data }) => { if (data?.value) setMaxAgeHours(String(data.value)); });
+  }, []);
+
+  const saveMaxAge = async () => {
+    const n = Math.max(1, Math.min(720, Number(maxAgeHours) || 24));
+    setSavingAge(true);
+    const { error } = await supabase.from("shop_settings").upsert(
+      { key: "slip_max_age_hours", value: String(n) }, { onConflict: "key" }
+    );
+    setSavingAge(false);
+    if (error) return toast.error(error.message);
+    setMaxAgeHours(String(n));
+    toast.success(`ตั้งค่าอายุสลิปสูงสุด ${n} ชม.`);
+  };
+
+  const exportSlipReportCsv = () => {
+    const rows = orders.filter(o => o.slip_url);
+    if (rows.length === 0) return toast.error("ไม่มีข้อมูลสลิป");
+    const header = [
+      "order_id","created_at","customer_name","customer_phone",
+      "total_amount","slip_status","slip_verified_at",
+      "expected_amount","slip_amount","amount_match",
+      "slip_date","slip_time","ref_no","sender_name","sender_bank",
+      "receiver_name","looks_edited","confidence","reject_reason","slip_url"
+    ];
+    const esc = (v: any) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = [header.join(",")];
+    for (const o of rows) {
+      const d: any = o.slip_data || {};
+      lines.push([
+        o.id, o.created_at, o.customer_name, o.customer_phone,
+        o.total_amount, o.slip_status || "pending", (o as any).slip_verified_at || "",
+        d.expected_amount ?? o.total_amount, d.amount ?? "", d.amount_match ?? "",
+        d.date ?? "", d.time ?? "", d.ref_no ?? (o as any).slip_ref_no ?? "",
+        d.sender_name ?? "", d.sender_bank ?? "",
+        d.receiver_name ?? "", d.looks_edited ?? "", d.confidence ?? "",
+        o.slip_reject_reason || "", o.slip_url || ""
+      ].map(esc).join(","));
+    }
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `slip-report-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`ดาวน์โหลด ${rows.length} รายการ`);
+  };
 
   const verifySlip = async (orderId: string) => {
     setVerifyingId(orderId);
