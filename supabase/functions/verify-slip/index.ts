@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
         const orderTs = new Date(order.created_at).getTime();
         if (dt.getTime() < orderTs - 5 * 60 * 1000) stale = true;
         if (dt.getTime() > now + 10 * 60 * 1000) future = true;
-        if (now - dt.getTime() > 24 * 60 * 60 * 1000) stale = true;
+        if (now - dt.getTime() > MAX_AGE_HOURS * 60 * 60 * 1000) stale = true;
       }
     }
 
