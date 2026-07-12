@@ -206,6 +206,34 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
         </Select>
       </div>
 
+      <Card className="border-border">
+        <CardContent className="p-3 flex flex-wrap items-end gap-3">
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Timer className="h-3 w-3" /> อายุสลิปสูงสุด (ชม.)</Label>
+              <Input
+                type="number" min={1} max={720}
+                value={maxAgeHours}
+                onChange={(e) => setMaxAgeHours(e.target.value)}
+                className="h-9 w-24 rounded-lg"
+              />
+            </div>
+            <Button size="sm" variant="outline" className="rounded-xl h-9" onClick={saveMaxAge} disabled={savingAge}>
+              {savingAge ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "บันทึก"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground max-w-[220px] leading-tight">
+              บอทจะปฏิเสธสลิปที่เก่ากว่านี้อัตโนมัติ
+            </p>
+          </div>
+          <div className="ml-auto">
+            <Button size="sm" variant="outline" className="rounded-xl h-9 gap-1.5" onClick={exportSlipReportCsv}>
+              <Download className="h-3.5 w-3.5" /> ดาวน์โหลดรายงานสลิป (CSV)
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+
       <div className="grid gap-3">
         {filteredOrders.map((o) => {
           const sc = statusConfig[o.status];
