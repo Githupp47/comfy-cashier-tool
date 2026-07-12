@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Package, ShoppingBag, Clock, CheckCircle2, XCircle,
-  MapPin, MessageSquare, Eye, EyeOff, Trash2, ScanLine, Loader2, AlertTriangle
+  MapPin, MessageSquare, Eye, EyeOff, Trash2, ScanLine, Loader2, AlertTriangle,
+  Download, Timer
 } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +24,63 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [maxAgeHours, setMaxAgeHours] = useState<string>("24");
+  const [savingAge, setSavingAge] = useState(false);
+
+  useEffect(() => {
+    supabase.from("shop_settings").select("value").eq("key", "slip_max_age_hours").maybeSingle()
+      .then(({ data }) => { if (data?.value) setMaxAgeHours(String(data.value)); });
+  }, []);
+
+  const saveMaxAge = async () => {
+    const n = Math.max(1, Math.min(720, Number(maxAgeHours) || 24));
+    setSavingAge(true);
+    const { error } = await supabase.from("shop_settings").upsert(
+      { key: "slip_max_age_hours", value: String(n) }, { onConflict: "key" }
+    );
+    setSavingAge(false);
+    if (error) return toast.error(error.message);
+    setMaxAgeHours(String(n));
+    toast.success(`ตั้งค่าอายุสลิปสูงสุด ${n} ชม.`);
+  };
+
+  const exportSlipReportCsv = () => {
+    const rows = orders.filter(o => o.slip_url);
+    if (rows.length === 0) return toast.error("ไม่มีข้อมูลสลิป");
+    const header = [
+      "order_id","created_at","customer_name","customer_phone",
+      "total_amount","slip_status","slip_verified_at",
+      "expected_amount","slip_amount","amount_match",
+      "slip_date","slip_time","ref_no","sender_name","sender_bank",
+      "receiver_name","looks_edited","confidence","reject_reason","slip_url"
+    ];
+    const esc = (v: any) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = [header.join(",")];
+    for (const o of rows) {
+      const d: any = o.slip_data || {};
+      lines.push([
+        o.id, o.created_at, o.customer_name, o.customer_phone,
+        o.total_amount, o.slip_status || "pending", (o as any).slip_verified_at || "",
+        d.expected_amount ?? o.total_amount, d.amount ?? "", d.amount_match ?? "",
+        d.date ?? "", d.time ?? "", d.ref_no ?? (o as any).slip_ref_no ?? "",
+        d.sender_name ?? "", d.sender_bank ?? "",
+        d.receiver_name ?? "", d.looks_edited ?? "", d.confidence ?? "",
+        o.slip_reject_reason || "", o.slip_url || ""
+      ].map(esc).join(","));
+    }
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `slip-report-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`ดาวน์โหลด ${rows.length} รายการ`);
+  };
 
   const verifySlip = async (orderId: string) => {
     setVerifyingId(orderId);
@@ -145,6 +205,34 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
           </SelectContent>
         </Select>
       </div>
+
+      <Card className="border-border">
+        <CardContent className="p-3 flex flex-wrap items-end gap-3">
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Timer className="h-3 w-3" /> อายุสลิปสูงสุด (ชม.)</Label>
+              <Input
+                type="number" min={1} max={720}
+                value={maxAgeHours}
+                onChange={(e) => setMaxAgeHours(e.target.value)}
+                className="h-9 w-24 rounded-lg"
+              />
+            </div>
+            <Button size="sm" variant="outline" className="rounded-xl h-9" onClick={saveMaxAge} disabled={savingAge}>
+              {savingAge ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "บันทึก"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground max-w-[220px] leading-tight">
+              บอทจะปฏิเสธสลิปที่เก่ากว่านี้อัตโนมัติ
+            </p>
+          </div>
+          <div className="ml-auto">
+            <Button size="sm" variant="outline" className="rounded-xl h-9 gap-1.5" onClick={exportSlipReportCsv}>
+              <Download className="h-3.5 w-3.5" /> ดาวน์โหลดรายงานสลิป (CSV)
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
 
       <div className="grid gap-3">
         {filteredOrders.map((o) => {

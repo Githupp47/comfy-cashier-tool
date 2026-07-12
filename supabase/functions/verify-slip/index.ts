@@ -26,6 +26,10 @@ Deno.serve(async (req) => {
     if (error || !order) throw new Error('order not found');
     if (!order.slip_url) throw new Error('ไม่พบสลิป');
 
+    // Read configurable max age (hours) from shop_settings
+    const { data: ageSetting } = await sb.from('shop_settings').select('value').eq('key', 'slip_max_age_hours').maybeSingle();
+    const MAX_AGE_HOURS = Math.max(1, Number(ageSetting?.value) || 24);
+
     const prompt = `คุณคือระบบตรวจสอบสลิปโอนเงินธนาคารไทย ดึงข้อมูลจากสลิปและตอบเป็น JSON เท่านั้น:
 {
   "amount": <ยอดเงินตัวเลข>,
@@ -84,7 +88,7 @@ Deno.serve(async (req) => {
         const orderTs = new Date(order.created_at).getTime();
         if (dt.getTime() < orderTs - 5 * 60 * 1000) stale = true;
         if (dt.getTime() > now + 10 * 60 * 1000) future = true;
-        if (now - dt.getTime() > 24 * 60 * 60 * 1000) stale = true;
+        if (now - dt.getTime() > MAX_AGE_HOURS * 60 * 60 * 1000) stale = true;
       }
     }
 
@@ -103,7 +107,7 @@ Deno.serve(async (req) => {
     const problems: string[] = [];
     if (!is_slip) problems.push('รูปนี้ไม่ใช่สลิปโอนเงิน');
     if (!amount_match) problems.push(`ยอดไม่ตรง (สลิป ฿${got || '?'} ≠ ต้องโอน ฿${expected})`);
-    if (stale) problems.push('สลิปเก่าเกิน 24 ชม. หรือก่อนสั่งซื้อ');
+    if (stale) problems.push(`สลิปเก่าเกิน ${MAX_AGE_HOURS} ชม. หรือก่อนสั่งซื้อ`);
     if (future) problems.push('วันเวลาสลิปอยู่ในอนาคต');
     if (duplicate) problems.push(`สลิปซ้ำกับออเดอร์อื่น (#${dupOrderId?.slice(0, 8)})`);
     if (looks_edited) problems.push('ภาพมีร่องรอยการตัดต่อ');
