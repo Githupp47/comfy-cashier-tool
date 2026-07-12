@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     const problems: string[] = [];
     if (!is_slip) problems.push('รูปนี้ไม่ใช่สลิปโอนเงิน');
     if (!amount_match) problems.push(`ยอดไม่ตรง (สลิป ฿${got || '?'} ≠ ต้องโอน ฿${expected})`);
-    if (stale) problems.push('สลิปเก่าเกิน 24 ชม. หรือก่อนสั่งซื้อ');
+    if (stale) problems.push(`สลิปเก่าเกิน ${MAX_AGE_HOURS} ชม. หรือก่อนสั่งซื้อ`);
     if (future) problems.push('วันเวลาสลิปอยู่ในอนาคต');
     if (duplicate) problems.push(`สลิปซ้ำกับออเดอร์อื่น (#${dupOrderId?.slice(0, 8)})`);
     if (looks_edited) problems.push('ภาพมีร่องรอยการตัดต่อ');
