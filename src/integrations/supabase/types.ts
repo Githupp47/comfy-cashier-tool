@@ -190,6 +190,7 @@ export type Database = {
           id: string
           note: string | null
           slip_data: Json | null
+          slip_ref_no: string | null
           slip_reject_reason: string | null
           slip_status: string | null
           slip_url: string | null
@@ -206,6 +207,7 @@ export type Database = {
           id?: string
           note?: string | null
           slip_data?: Json | null
+          slip_ref_no?: string | null
           slip_reject_reason?: string | null
           slip_status?: string | null
           slip_url?: string | null
@@ -222,6 +224,7 @@ export type Database = {
           id?: string
           note?: string | null
           slip_data?: Json | null
+          slip_ref_no?: string | null
           slip_reject_reason?: string | null
           slip_status?: string | null
           slip_url?: string | null

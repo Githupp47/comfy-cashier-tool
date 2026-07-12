@@ -5,6 +5,16 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+async function pushLine(token: string, to: string, text: string) {
+  try {
+    await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ to, messages: [{ type: 'text', text }] }),
+    });
+  } catch (e) { console.error('pushLine', e); }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -16,9 +26,9 @@ Deno.serve(async (req) => {
     if (error || !order) throw new Error('order not found');
     if (!order.slip_url) throw new Error('ไม่พบสลิป');
 
-    const prompt = `คุณคือระบบตรวจสอบสลิปโอนเงินธนาคารไทย ดึงข้อมูลจากสลิปในรูปภาพและตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น:
+    const prompt = `คุณคือระบบตรวจสอบสลิปโอนเงินธนาคารไทย ดึงข้อมูลจากสลิปและตอบเป็น JSON เท่านั้น:
 {
-  "amount": <ยอดเงินเป็นตัวเลข ไม่มี comma>,
+  "amount": <ยอดเงินตัวเลข>,
   "date": "<YYYY-MM-DD หรือ null>",
   "time": "<HH:MM หรือ null>",
   "ref_no": "<เลขอ้างอิง/รหัสธุรกรรม หรือ null>",
@@ -27,7 +37,8 @@ Deno.serve(async (req) => {
   "receiver_name": "<ชื่อผู้รับ หรือ null>",
   "receiver_account": "<เลขบัญชี/พร้อมเพย์ผู้รับ หรือ null>",
   "receiver_bank": "<ธนาคารผู้รับ หรือ null>",
-  "is_slip": <true/false รูปนี้เป็นสลิปโอนเงินจริงไหม>,
+  "is_slip": <true/false>,
+  "looks_edited": <true/false ดูมีการตัดต่อ/แต่งภาพหรือไม่>,
   "confidence": <0-1>
 }`;
 
@@ -45,11 +56,7 @@ Deno.serve(async (req) => {
         }],
       }),
     });
-
-    if (!aiRes.ok) {
-      const t = await aiRes.text();
-      throw new Error(`AI error: ${t.slice(0, 200)}`);
-    }
+    if (!aiRes.ok) throw new Error(`AI error: ${(await aiRes.text()).slice(0, 200)}`);
     const aiJson = await aiRes.json();
     let raw = aiJson.choices?.[0]?.message?.content ?? '';
     raw = raw.replace(/```json\n?|\n?```/g, '').trim();
@@ -59,57 +66,115 @@ Deno.serve(async (req) => {
     const expected = Number(order.total_amount || 0);
     const got = Number(extracted.amount || 0);
     const amount_match = expected > 0 && Math.abs(expected - got) < 0.5;
-    const is_slip = extracted.is_slip !== false; // treat undefined as true
+    const is_slip = extracted.is_slip !== false;
+    const looks_edited = extracted.looks_edited === true;
     const confidence = Number(extracted.confidence ?? 0.7);
+    const ref_no: string | null = extracted.ref_no ?? null;
 
-    const auto_ok = auto && is_slip && amount_match && confidence >= 0.5;
-    const result = { ...extracted, expected_amount: expected, amount_match, auto_approved: auto_ok };
-
-    // Find target chat session for customer notification
-    let notifySession = session_id as string | null;
-    if (!notifySession && order.customer_phone) {
-      const { data: msg } = await sb.from('chat_messages')
-        .select('session_id')
-        .eq('customer_phone', order.customer_phone)
-        .not('session_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      notifySession = msg?.session_id ?? null;
+    // --- Anti-fraud checks ---
+    // 1) Old slip: date must be within 24h before now and >= order creation - 5min
+    let stale = false;
+    let future = false;
+    let slip_ts: Date | null = null;
+    if (extracted.date) {
+      const dt = new Date(`${extracted.date}T${extracted.time || '00:00'}:00+07:00`);
+      if (!isNaN(dt.getTime())) {
+        slip_ts = dt;
+        const now = Date.now();
+        const orderTs = new Date(order.created_at).getTime();
+        if (dt.getTime() < orderTs - 5 * 60 * 1000) stale = true;
+        if (dt.getTime() > now + 10 * 60 * 1000) future = true;
+        if (now - dt.getTime() > 24 * 60 * 60 * 1000) stale = true;
+      }
     }
+
+    // 2) Duplicate ref_no across other orders
+    let duplicate = false;
+    let dupOrderId: string | null = null;
+    if (ref_no) {
+      const { data: dups } = await sb.from('orders')
+        .select('id')
+        .eq('slip_ref_no', ref_no)
+        .neq('id', order_id)
+        .limit(1);
+      if (dups && dups.length > 0) { duplicate = true; dupOrderId = dups[0].id; }
+    }
+
+    const problems: string[] = [];
+    if (!is_slip) problems.push('รูปนี้ไม่ใช่สลิปโอนเงิน');
+    if (!amount_match) problems.push(`ยอดไม่ตรง (สลิป ฿${got || '?'} ≠ ต้องโอน ฿${expected})`);
+    if (stale) problems.push('สลิปเก่าเกิน 24 ชม. หรือก่อนสั่งซื้อ');
+    if (future) problems.push('วันเวลาสลิปอยู่ในอนาคต');
+    if (duplicate) problems.push(`สลิปซ้ำกับออเดอร์อื่น (#${dupOrderId?.slice(0, 8)})`);
+    if (looks_edited) problems.push('ภาพมีร่องรอยการตัดต่อ');
+    if (confidence < 0.5) problems.push('อ่านสลิปไม่ชัด');
+
+    const auto_ok = auto && problems.length === 0;
+    const result = {
+      ...extracted,
+      expected_amount: expected,
+      amount_match,
+      stale, future, duplicate, duplicate_order_id: dupOrderId,
+      looks_edited,
+      slip_iso: slip_ts?.toISOString() ?? null,
+      auto_approved: auto_ok,
+      problems,
+    };
+
+    // Find LINE user for this order (via chat sessions matching customer_phone)
+    let notifySession = session_id as string | null;
+    let lineUserId: string | null = null;
+    if (order.customer_phone) {
+      const { data: msgs } = await sb.from('chat_messages')
+        .select('session_id, line_user_id, platform')
+        .eq('customer_phone', order.customer_phone)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (msgs) {
+        if (!notifySession) notifySession = msgs.find(m => m.session_id)?.session_id ?? null;
+        const lineMsg = msgs.find(m => m.platform === 'line' && m.line_user_id);
+        if (lineMsg) lineUserId = lineMsg.line_user_id;
+      }
+    }
+
+    const orderShort = `#${String(order.id).slice(0, 8)}`;
+    let customerMsg = '';
 
     if (auto_ok) {
       await sb.from('orders').update({
         slip_data: result,
         slip_status: 'approved',
+        slip_ref_no: ref_no,
         slip_verified_at: new Date().toISOString(),
         status: order.status === 'pending' ? 'confirmed' : order.status,
       }).eq('id', order_id);
-
-      const okMsg = `✅ ยืนยันการชำระเงินอัตโนมัติเรียบร้อยค่ะ (฿${got.toLocaleString()})\nกำลังเตรียมออเดอร์ให้นะคะ 🙏`;
-      if (notifySession) {
-        await sb.from('chat_messages').insert({
-          session_id: notifySession, order_id, sender_type: 'bot', message: okMsg,
-        });
-      }
+      customerMsg = `✅ ยืนยันการชำระเงินเรียบร้อยค่ะ (ออเดอร์ ${orderShort} · ฿${got.toLocaleString()})\nกำลังเตรียมออเดอร์ให้นะคะ 🙏`;
     } else {
-      // Needs admin review — mark so admin gets an update-based alert
-      const reason = !is_slip
-        ? 'รูปไม่ใช่สลิป'
-        : !amount_match
-          ? `ยอดไม่ตรง (สลิป ฿${got || '?'} ≠ ต้องโอน ฿${expected})`
-          : 'ต้องตรวจสอบเพิ่มเติม';
+      const reason = problems[0] || 'ต้องตรวจสอบเพิ่มเติม';
+      const isReject = duplicate || future || (!is_slip && confidence > 0.6);
       await sb.from('orders').update({
         slip_data: result,
-        slip_status: 'needs_review',
-        slip_reject_reason: reason,
+        slip_status: isReject ? 'rejected' : 'needs_review',
+        slip_ref_no: ref_no,
+        slip_reject_reason: problems.join(' • '),
       }).eq('id', order_id);
+      const head = isReject ? '❌ ปฏิเสธสลิป' : '⏳ ต้องตรวจสอบเพิ่ม';
+      customerMsg = `${head} (ออเดอร์ ${orderShort})\nสาเหตุ: ${problems.join(' • ')}\n${isReject ? 'กรุณาแนบสลิปที่ถูกต้อง' : 'แอดมินจะติดต่อกลับโดยเร็วค่ะ'} 🙏\nดูรายละเอียด: /track?phone=${encodeURIComponent(order.customer_phone || '')}`;
+    }
 
-      const waitMsg = `⏳ ได้รับสลิปแล้ว กำลังตรวจสอบเพิ่มเติม (${reason})\nแอดมินจะติดต่อกลับโดยเร็วค่ะ 🙏`;
-      if (notifySession) {
-        await sb.from('chat_messages').insert({
-          session_id: notifySession, order_id, sender_type: 'bot', message: waitMsg,
-        });
+    if (notifySession) {
+      await sb.from('chat_messages').insert({
+        session_id: notifySession, order_id, sender_type: 'bot', message: customerMsg,
+        platform: lineUserId ? 'line' : 'web',
+        line_user_id: lineUserId,
+      });
+    }
+
+    if (lineUserId) {
+      const { data: integ } = await sb.from('messaging_integrations')
+        .select('channel_access_token, enabled').eq('platform', 'line').maybeSingle();
+      if (integ?.enabled && integ.channel_access_token) {
+        await pushLine(integ.channel_access_token, lineUserId, customerMsg);
       }
     }
 

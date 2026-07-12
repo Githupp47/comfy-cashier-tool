@@ -116,6 +116,35 @@ export default function TrackOrder() {
                     📝 {o.note}
                   </p>
                 )}
+                {o.slip_status && (
+                  <div className={`text-xs rounded-lg p-2 border ${
+                    o.slip_status === "approved" ? "bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400" :
+                    o.slip_status === "rejected" ? "bg-destructive/10 border-destructive/30 text-destructive" :
+                    o.slip_status === "needs_review" ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-700 dark:text-yellow-400" :
+                    "bg-muted/30 border-border text-muted-foreground"
+                  }`}>
+                    <p className="font-medium">
+                      สถานะสลิป: {
+                        o.slip_status === "approved" ? "✅ ยืนยันแล้ว" :
+                        o.slip_status === "rejected" ? "❌ ปฏิเสธ" :
+                        o.slip_status === "needs_review" ? "⏳ ต้องตรวจสอบ" :
+                        "⏳ รอตรวจสอบ"
+                      }
+                    </p>
+                    {o.slip_reject_reason && (
+                      <p className="mt-1 opacity-90">เหตุผล: {o.slip_reject_reason}</p>
+                    )}
+                    {o.slip_data?.amount && (
+                      <p className="mt-1 opacity-80">
+                        ยอด ฿{Number(o.slip_data.amount).toLocaleString()} / ต้องโอน ฿{Number(o.total_amount).toLocaleString()}
+                        {o.slip_data.ref_no && ` · อ้างอิง ${o.slip_data.ref_no}`}
+                      </p>
+                    )}
+                    {o.slip_status === "rejected" && (
+                      <p className="mt-1">กรุณาส่งสลิปที่ถูกต้องผ่านแชท 💬</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
