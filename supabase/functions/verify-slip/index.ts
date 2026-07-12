@@ -26,6 +26,10 @@ Deno.serve(async (req) => {
     if (error || !order) throw new Error('order not found');
     if (!order.slip_url) throw new Error('ไม่พบสลิป');
 
+    // Read configurable max age (hours) from shop_settings
+    const { data: ageSetting } = await sb.from('shop_settings').select('value').eq('key', 'slip_max_age_hours').maybeSingle();
+    const MAX_AGE_HOURS = Math.max(1, Number(ageSetting?.value) || 24);
+
     const prompt = `คุณคือระบบตรวจสอบสลิปโอนเงินธนาคารไทย ดึงข้อมูลจากสลิปและตอบเป็น JSON เท่านั้น:
 {
   "amount": <ยอดเงินตัวเลข>,
