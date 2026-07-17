@@ -43,7 +43,7 @@ export default function Checkout() {
     [toppings, toppingQty]
   );
   const toppingTotal = selectedToppings.reduce((s, t) => s + t.price * t.quantity, 0);
-  const grandTotal = totalAmount + toppingTotal;
+  const subTotal = totalAmount + toppingTotal;
 
   const { data: settings } = useQuery({
     queryKey: ["shop-settings-checkout"],
@@ -58,6 +58,11 @@ export default function Checkout() {
   const qrUrl = settings?.payment_qr_url || qrFallback;
   const bankName = settings?.payment_bank_name || "SCB (ไทยพาณิชย์)";
   const bankAccount = settings?.payment_bank_account || "4230504802";
+
+  const shippingFlat = Math.max(0, Number(settings?.shipping_fee_flat) || 0);
+  const freeThreshold = Math.max(0, Number(settings?.shipping_free_threshold) || 0);
+  const shippingFee = shippingFlat > 0 && (freeThreshold === 0 || subTotal < freeThreshold) ? shippingFlat : 0;
+  const grandTotal = subTotal + shippingFee;
 
   const copyAccount = () => {
     navigator.clipboard.writeText(bankAccount);
@@ -90,6 +95,7 @@ export default function Checkout() {
           note: note.trim() || null,
           slip_url: urlData.publicUrl,
           total_amount: grandTotal,
+          shipping_fee: shippingFee,
           status: "pending",
         })
         .select()
@@ -187,6 +193,21 @@ export default function Checkout() {
                       <span className="text-muted-foreground">ท็อปปิ้ง</span>
                       <span className="font-medium">฿{toppingTotal.toLocaleString()}</span>
                     </div>
+                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">ค่าจัดส่ง</span>
+                    {shippingFee > 0 ? (
+                      <span className="font-medium">฿{shippingFee.toLocaleString()}</span>
+                    ) : (
+                      <span className="font-medium text-green-600">
+                        ฟรี {freeThreshold > 0 && subTotal >= freeThreshold && shippingFlat > 0 ? "(ครบยอดขั้นต่ำ)" : ""}
+                      </span>
+                    )}
+                  </div>
+                  {freeThreshold > 0 && shippingFlat > 0 && subTotal < freeThreshold && (
+                    <p className="text-xs text-muted-foreground">
+                      💡 สั่งเพิ่มอีก ฿{(freeThreshold - subTotal).toLocaleString()} เพื่อรับส่งฟรี
+                    </p>
                   )}
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-sm text-muted-foreground">ยอดรวมทั้งหมด</span>

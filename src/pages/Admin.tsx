@@ -24,6 +24,7 @@ import { ShopSettings } from "@/components/admin/ShopSettings";
 import { BotSettings } from "@/components/admin/BotSettings";
 import { MessagingIntegrations } from "@/components/admin/MessagingIntegrations";
 import { ToppingsManager } from "@/components/admin/ToppingsManager";
+import { SalesDashboard } from "@/components/admin/SalesDashboard";
 
 type Order = Tables<"orders">;
 
@@ -314,6 +315,9 @@ export default function Admin() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-card border border-border p-1 h-auto rounded-xl flex-wrap">
+            <TabsTrigger value="dashboard" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
+              <BarChart3 className="h-4 w-4" /> ภาพรวม
+            </TabsTrigger>
             <TabsTrigger value="orders" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <ShoppingBag className="h-4 w-4" /> ออเดอร์
               {pendingOrders > 0 && <Badge variant="destructive" className="h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-[10px]">{pendingOrders}</Badge>}
@@ -338,6 +342,7 @@ export default function Admin() {
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="dashboard"><SalesDashboard /></TabsContent>
           <TabsContent value="orders"><OrdersManager orders={orders ?? []} queryClient={queryClient} /></TabsContent>
           <TabsContent value="chat"><AdminChat /></TabsContent>
           <TabsContent value="products"><ProductsManager products={products ?? []} queryClient={queryClient} /></TabsContent>

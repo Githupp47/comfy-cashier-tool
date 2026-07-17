@@ -189,6 +189,7 @@ export type Database = {
           dormitory_map_link: string | null
           id: string
           note: string | null
+          shipping_fee: number
           slip_data: Json | null
           slip_ref_no: string | null
           slip_reject_reason: string | null
@@ -206,6 +207,7 @@ export type Database = {
           dormitory_map_link?: string | null
           id?: string
           note?: string | null
+          shipping_fee?: number
           slip_data?: Json | null
           slip_ref_no?: string | null
           slip_reject_reason?: string | null
@@ -223,6 +225,7 @@ export type Database = {
           dormitory_map_link?: string | null
           id?: string
           note?: string | null
+          shipping_fee?: number
           slip_data?: Json | null
           slip_ref_no?: string | null
           slip_reject_reason?: string | null
