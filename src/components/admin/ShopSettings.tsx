@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Image, Store, CreditCard, Truck } from "lucide-react";
+import { Image, Store, CreditCard, Truck, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export function ShopSettings() {
@@ -23,12 +23,17 @@ export function ShopSettings() {
   });
 
   const [form, setForm] = useState<Record<string, string>>({});
+  const [zones, setZones] = useState<{ name: string; fee: number }[]>([]);
 
   useEffect(() => {
     if (settings) {
       const obj: Record<string, string> = {};
       settings.forEach((s) => { obj[s.key] = s.value ?? ""; });
       setForm(obj);
+      try {
+        const parsed = obj.shipping_zones ? JSON.parse(obj.shipping_zones) : [];
+        setZones(Array.isArray(parsed) ? parsed : []);
+      } catch { setZones([]); }
     }
   }, [settings]);
 
@@ -54,7 +59,12 @@ export function ShopSettings() {
         qrUrl = urlData.publicUrl;
       }
 
-      const updates: Record<string, string> = { ...form, logo_url: logoUrl, payment_qr_url: qrUrl };
+      const updates: Record<string, string> = {
+        ...form,
+        logo_url: logoUrl,
+        payment_qr_url: qrUrl,
+        shipping_zones: JSON.stringify(zones.filter((z) => z.name.trim())),
+      };
       for (const [key, value] of Object.entries(updates)) {
         // Try update first, if no rows affected then insert
         const { data, error } = await supabase.from("shop_settings").update({ value }).eq("key", key).select();
@@ -144,6 +154,24 @@ export function ShopSettings() {
             <Label className="text-sm font-medium">ยอดขั้นต่ำส่งฟรี (บาท)</Label>
             <Input className="rounded-xl" type="number" min="0" value={form.shipping_free_threshold ?? ""} onChange={(e) => setForm({ ...form, shipping_free_threshold: e.target.value })} placeholder="เช่น 300" />
             <p className="text-xs text-muted-foreground">เมื่อยอดสินค้าถึงจำนวนนี้ ระบบจะยกเว้นค่าส่งอัตโนมัติ ตั้งเป็น 0 = ปิดฟีเจอร์</p>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-border/60">
+            <Label className="text-sm font-medium">โซนจัดส่ง (คิดค่าส่งตามพื้นที่)</Label>
+            <p className="text-xs text-muted-foreground">ถ้ามีโซน ลูกค้าต้องเลือกโซนก่อนชำระเงิน และระบบจะใช้ค่าส่งของโซนนั้นแทนค่าส่งเหมา</p>
+            {zones.map((z, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input className="rounded-xl flex-1" value={z.name} placeholder="ชื่อโซน เช่น หอพัก A / ในเมือง"
+                  onChange={(e) => setZones(zones.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                <Input className="rounded-xl w-28" type="number" min="0" value={z.fee}
+                  onChange={(e) => setZones(zones.map((x, j) => (j === i ? { ...x, fee: Number(e.target.value) } : x)))} />
+                <Button variant="outline" size="icon" className="rounded-xl text-destructive shrink-0"
+                  onClick={() => setZones(zones.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ))}
+            <Button variant="outline" className="rounded-xl gap-1.5 w-full" onClick={() => setZones([...zones, { name: "", fee: 0 }])}>
+              <Plus className="h-4 w-4" /> เพิ่มโซนจัดส่ง
+            </Button>
           </div>
         </CardContent>
       </Card>

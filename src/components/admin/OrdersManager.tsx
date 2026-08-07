@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
+import { ShippingPanel } from "./ShippingPanel";
 
 type Order = Tables<"orders"> & { slip_status?: string | null; slip_data?: any; slip_reject_reason?: string | null };
 
@@ -142,16 +143,26 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+      const now = new Date().toISOString();
+      const patch: any = { status };
+      if (status === "preparing") patch.preparing_at = now;
+      if (status === "delivering") patch.shipped_at = now;
+      if (status === "completed") patch.delivered_at = now;
+      const { error } = await supabase.from("orders").update(patch).eq("id", id);
       if (error) throw error;
-      if (status === "completed" || status === "delivering") {
-        const msg = status === "delivering"
-          ? "🚚 ออเดอร์ของคุณกำลังจัดส่งแล้วค่ะ!"
-          : "✅ ออเดอร์ของคุณจัดส่งเสร็จเรียบร้อยแล้วค่ะ ขอบคุณที่อุดหนุนนะคะ 🙏";
+
+      const o: any = orders.find((x) => x.id === id);
+      const track = o?.tracking_number ? `\nเลขพัสดุ: ${o.tracking_number}${o.tracking_url ? `\nติดตาม: ${o.tracking_url}` : ""}` : "";
+      const msgs: Record<string, string> = {
+        confirmed: "✅ ยืนยันออเดอร์เรียบร้อยค่ะ กำลังจัดคิวให้นะคะ",
+        preparing: "👨‍🍳 กำลังเตรียมสินค้าของคุณอยู่ค่ะ",
+        delivering: `🚚 ออเดอร์ของคุณออกจากร้านแล้วค่ะ กำลังจัดส่ง${track}`,
+        completed: "📬 จัดส่งถึงเรียบร้อยแล้วค่ะ ขอบคุณที่อุดหนุนนะคะ 🙏",
+        cancelled: "❌ ออเดอร์นี้ถูกยกเลิกค่ะ หากมีข้อสงสัยทักแชทได้เลยนะคะ",
+      };
+      if (msgs[status]) {
         await supabase.from("chat_messages").insert({
-          order_id: id,
-          sender_type: "admin",
-          message: msg,
+          order_id: id, sender_type: "admin", message: msgs[status],
         });
       }
     },
@@ -350,6 +361,8 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
                       </Button>
                     )}
                   </div>
+
+                  {o.status !== "cancelled" && <ShippingPanel order={o} queryClient={queryClient} />}
 
                   {selectedOrder?.id === o.id && orderItems && (
                     <div className="mt-1 bg-muted/30 rounded-xl p-3 border border-border/50 space-y-2">

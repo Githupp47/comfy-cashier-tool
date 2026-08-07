@@ -9,9 +9,18 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Package, Clock, Truck, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
+const STEPS = [
+  { key: "confirmed", label: "ยืนยันแล้ว", emoji: "✅" },
+  { key: "preparing", label: "กำลังเตรียม", emoji: "👨‍🍳" },
+  { key: "delivering", label: "กำลังจัดส่ง", emoji: "🚚" },
+  { key: "completed", label: "ส่งถึงแล้ว", emoji: "📬" },
+];
+const ORDER_FLOW = ["pending", "confirmed", "preparing", "delivering", "completed"];
+
 const statusConfig: Record<string, { label: string; icon: any; color: string }> = {
   pending: { label: "รอตรวจสอบ", icon: Clock, color: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" },
   confirmed: { label: "ยืนยันแล้ว", icon: CheckCircle2, color: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
+  preparing: { label: "กำลังเตรียม", icon: Package, color: "bg-purple-500/10 text-purple-700 dark:text-purple-400" },
   delivering: { label: "กำลังจัดส่ง", icon: Truck, color: "bg-purple-500/10 text-purple-700 dark:text-purple-400" },
   completed: { label: "ส่งเสร็จสิ้น", icon: CheckCircle2, color: "bg-green-500/10 text-green-700 dark:text-green-400" },
   cancelled: { label: "ยกเลิก", icon: XCircle, color: "bg-destructive/10 text-destructive" },
@@ -111,6 +120,43 @@ export default function TrackOrder() {
                   <span className="text-sm text-muted-foreground">รวม</span>
                   <span className="text-lg font-bold text-primary">฿{Number(o.total_amount).toLocaleString()}</span>
                 </div>
+                {o.status !== "cancelled" && (
+                  <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+                    <div className="flex items-center">
+                      {STEPS.map((st, i) => {
+                        const done = ORDER_FLOW.indexOf(o.status) >= i + 1;
+                        const at = [null, o.preparing_at, o.shipped_at, o.delivered_at][i];
+                        return (
+                          <div key={st.key} className="flex-1 flex items-center">
+                            <div className="flex flex-col items-center">
+                              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] ${done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                                {st.emoji}
+                              </div>
+                              <span className={`text-[10px] mt-1 ${done ? "text-foreground font-medium" : "text-muted-foreground"}`}>{st.label}</span>
+                              {at && <span className="text-[9px] text-muted-foreground">{new Date(at).toLocaleString("th-TH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
+                            </div>
+                            {i < STEPS.length - 1 && <div className={`h-0.5 flex-1 mx-1 ${ORDER_FLOW.indexOf(o.status) >= i + 2 ? "bg-primary" : "bg-border"}`} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {(o.tracking_number || o.shipping_zone) && (
+                      <div className="text-xs space-y-1 pt-1 border-t border-border/50">
+                        {o.shipping_zone && <p className="text-muted-foreground">โซนจัดส่ง: {o.shipping_zone} · ค่าส่ง ฿{Number(o.shipping_fee || 0).toLocaleString()}</p>}
+                        {o.tracking_number && (
+                          <p className="flex items-center gap-1.5 flex-wrap">
+                            <Truck className="h-3.5 w-3.5 text-primary" />
+                            <span className="font-mono font-medium">{o.tracking_number}</span>
+                            {o.tracking_url && (
+                              <a href={o.tracking_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">ติดตามพัสดุ</a>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {o.note && (
                   <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
                     📝 {o.note}

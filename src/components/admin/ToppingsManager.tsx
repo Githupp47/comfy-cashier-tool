@@ -107,6 +107,16 @@ export function ToppingsManager() {
                 {t.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.description}</p>}
                 <p className="text-primary font-bold mt-1">+฿{t.price}</p>
               </div>
+              <div className="flex flex-col items-center gap-0.5 pr-1">
+                <Switch checked={!!t.is_available} onCheckedChange={async (v) => {
+                  const { error } = await (supabase.from as any)("toppings").update({ is_available: v }).eq("id", t.id);
+                  if (error) return toast.error(error.message);
+                  qc.invalidateQueries({ queryKey: ["admin-toppings"] });
+                  qc.invalidateQueries({ queryKey: ["toppings"] });
+                  toast.success(v ? "เปิดขายท็อปปิ้งนี้" : "ปิดท็อปปิ้งนี้แล้ว");
+                }} />
+                <span className="text-[10px] text-muted-foreground">{t.is_available ? "เปิด" : "ปิด"}</span>
+              </div>
               <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => { setEdit(t); setOpen(true); }}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>

@@ -183,13 +183,18 @@ export type Database = {
       }
       orders: {
         Row: {
+          courier: string | null
           created_at: string
           customer_name: string
           customer_phone: string
+          delivered_at: string | null
           dormitory_map_link: string | null
           id: string
           note: string | null
+          preparing_at: string | null
+          shipped_at: string | null
           shipping_fee: number
+          shipping_zone: string | null
           slip_data: Json | null
           slip_ref_no: string | null
           slip_reject_reason: string | null
@@ -198,16 +203,23 @@ export type Database = {
           slip_verified_at: string | null
           status: string
           total_amount: number
+          tracking_number: string | null
+          tracking_url: string | null
           updated_at: string
         }
         Insert: {
+          courier?: string | null
           created_at?: string
           customer_name: string
           customer_phone: string
+          delivered_at?: string | null
           dormitory_map_link?: string | null
           id?: string
           note?: string | null
+          preparing_at?: string | null
+          shipped_at?: string | null
           shipping_fee?: number
+          shipping_zone?: string | null
           slip_data?: Json | null
           slip_ref_no?: string | null
           slip_reject_reason?: string | null
@@ -216,16 +228,23 @@ export type Database = {
           slip_verified_at?: string | null
           status?: string
           total_amount?: number
+          tracking_number?: string | null
+          tracking_url?: string | null
           updated_at?: string
         }
         Update: {
+          courier?: string | null
           created_at?: string
           customer_name?: string
           customer_phone?: string
+          delivered_at?: string | null
           dormitory_map_link?: string | null
           id?: string
           note?: string | null
+          preparing_at?: string | null
+          shipped_at?: string | null
           shipping_fee?: number
+          shipping_zone?: string | null
           slip_data?: Json | null
           slip_ref_no?: string | null
           slip_reject_reason?: string | null
@@ -234,6 +253,8 @@ export type Database = {
           slip_verified_at?: string | null
           status?: string
           total_amount?: number
+          tracking_number?: string | null
+          tracking_url?: string | null
           updated_at?: string
         }
         Relationships: []
