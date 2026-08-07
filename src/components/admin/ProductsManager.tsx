@@ -56,6 +56,19 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
     onError: (err: any) => toast.error(err.message),
   });
 
+  const toggleAvailable = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("products").update({ is_available: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success(v.value ? "เปิดขายเมนูนี้แล้ว" : "ปิดเมนูนี้แล้ว (ลูกค้าจะไม่เห็น)");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("products").delete().eq("id", id);
@@ -119,7 +132,11 @@ export function ProductsManager({ products, queryClient }: { products: Product[]
                     </Badge>
                   </div>
                 </div>
-                <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col items-center gap-0.5 pr-1">
+                    <Switch checked={!!p.is_available} onCheckedChange={(v) => toggleAvailable.mutate({ id: p.id, value: v })} />
+                    <span className="text-[10px] text-muted-foreground">{p.is_available ? "เปิดขาย" : "ปิด"}</span>
+                  </div>
                   <Button size="icon" variant="outline" className="rounded-xl h-9 w-9" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="icon" variant="outline" className="rounded-xl h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => { if (confirm("ลบสินค้านี้?")) deleteMutation.mutate(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
