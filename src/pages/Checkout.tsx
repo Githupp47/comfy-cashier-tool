@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCart } from "@/contexts/CartContext";
 import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check, Sparkles, Plus, Minus } from "lucide-react";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Truck } from "lucide-react";
 import qrFallback from "@/assets/qr-payment.jpg";
 
 type Topping = { id: string; name: string; price: number; stock_quantity: number; is_available: boolean };
@@ -26,6 +28,7 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toppingQty, setToppingQty] = useState<Record<string, number>>({});
+  const [zoneName, setZoneName] = useState<string>("");
 
   const { data: toppings = [] } = useQuery({
     queryKey: ["toppings"],
@@ -61,7 +64,18 @@ export default function Checkout() {
 
   const shippingFlat = Math.max(0, Number(settings?.shipping_fee_flat) || 0);
   const freeThreshold = Math.max(0, Number(settings?.shipping_free_threshold) || 0);
-  const shippingFee = shippingFlat > 0 && (freeThreshold === 0 || subTotal < freeThreshold) ? shippingFlat : 0;
+
+  const zones: { name: string; fee: number }[] = useMemo(() => {
+    try {
+      const parsed = JSON.parse(settings?.shipping_zones || "[]");
+      return Array.isArray(parsed) ? parsed.filter((z: any) => z?.name) : [];
+    } catch { return []; }
+  }, [settings]);
+
+  const selectedZone = zones.find((z) => z.name === zoneName) || null;
+  const baseShipping = zones.length > 0 ? Math.max(0, Number(selectedZone?.fee) || 0) : shippingFlat;
+  const freeByThreshold = freeThreshold > 0 && subTotal >= freeThreshold;
+  const shippingFee = freeByThreshold ? 0 : baseShipping;
   const grandTotal = subTotal + shippingFee;
 
   const copyAccount = () => {
@@ -74,6 +88,7 @@ export default function Checkout() {
   const handleSubmit = async () => {
     if (items.length === 0) return toast.error("ตะกร้าว่างเปล่า");
     if (!name.trim() || !phone.trim()) return toast.error("กรุณากรอกชื่อและเบอร์โทร");
+    if (zones.length > 0 && !selectedZone) return toast.error("กรุณาเลือกโซนจัดส่ง");
     if (!slipFile) return toast.error("กรุณาแนบสลิปการโอนเงิน");
 
     setSubmitting(true);
@@ -96,6 +111,7 @@ export default function Checkout() {
           slip_url: urlData.publicUrl,
           total_amount: grandTotal,
           shipping_fee: shippingFee,
+          shipping_zone: selectedZone?.name ?? null,
           status: "pending",
         })
         .select()
@@ -194,17 +210,30 @@ export default function Checkout() {
                       <span className="font-medium">฿{toppingTotal.toLocaleString()}</span>
                     </div>
                   )}
+                  {zones.length > 0 && (
+                    <div className="flex items-center justify-between gap-2 text-sm pb-1">
+                      <span className="text-muted-foreground flex items-center gap-1"><Truck className="h-3.5 w-3.5" /> โซนจัดส่ง *</span>
+                      <Select value={zoneName} onValueChange={setZoneName}>
+                        <SelectTrigger className="w-[190px] h-9 rounded-xl"><SelectValue placeholder="เลือกโซน" /></SelectTrigger>
+                        <SelectContent>
+                          {zones.map((z) => (
+                            <SelectItem key={z.name} value={z.name}>{z.name} · ฿{Number(z.fee).toLocaleString()}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">ค่าจัดส่ง</span>
                     {shippingFee > 0 ? (
                       <span className="font-medium">฿{shippingFee.toLocaleString()}</span>
                     ) : (
                       <span className="font-medium text-green-600">
-                        ฟรี {freeThreshold > 0 && subTotal >= freeThreshold && shippingFlat > 0 ? "(ครบยอดขั้นต่ำ)" : ""}
+                        {zones.length > 0 && !selectedZone ? "— เลือกโซนก่อน" : `ฟรี ${freeByThreshold ? "(ครบยอดขั้นต่ำ)" : ""}`}
                       </span>
                     )}
                   </div>
-                  {freeThreshold > 0 && shippingFlat > 0 && subTotal < freeThreshold && (
+                  {freeThreshold > 0 && baseShipping > 0 && subTotal < freeThreshold && (
                     <p className="text-xs text-muted-foreground">
                       💡 สั่งเพิ่มอีก ฿{(freeThreshold - subTotal).toLocaleString()} เพื่อรับส่งฟรี
                     </p>
