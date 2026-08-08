@@ -137,7 +137,23 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
           </Button>
         )}
       </div>
-      {order.shipping_zone && <p className="text-[11px] text-muted-foreground">โซนจัดส่ง: {order.shipping_zone} · ค่าส่ง ฿{Number(order.shipping_fee || 0).toLocaleString()}</p>}
+
+      {/* ค่าส่งกรอกเอง (คิดแยกจากค่าสินค้า) */}
+      <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-border/60">
+        <div className="space-y-1">
+          <Label className="text-[11px]">ค่าส่ง (บาท) — กรอกเอง</Label>
+          <Input className="h-9 w-32 rounded-lg text-sm" type="number" min="0" value={fee}
+            onChange={(e) => setFee(e.target.value)} placeholder="เช่น 40" />
+        </div>
+        <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5" onClick={saveFee} disabled={savingFee}>
+          <Save className="h-3.5 w-3.5" /> บันทึกค่าส่ง & แจ้งลูกค้า
+        </Button>
+        <p className="text-[11px] text-muted-foreground w-full">
+          ค่าสินค้า ฿{(Number(order.total_amount || 0) - Number(order.shipping_fee || 0)).toLocaleString()} + ค่าส่ง ฿{Number(order.shipping_fee || 0).toLocaleString()} = รวม ฿{Number(order.total_amount || 0).toLocaleString()}
+          {order.shipping_zone ? ` · โซน: ${order.shipping_zone}` : ""}
+        </p>
+      </div>
+
     </div>
   );
 }
