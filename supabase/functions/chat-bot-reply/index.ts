@@ -85,7 +85,9 @@ const tools = [
       description: "ตรวจสอบสต็อกสินค้า (ใส่ชื่อสินค้าถ้ามี ไม่ใส่จะคืนทุกตัว)",
       parameters: { type: "object", properties: { product_name: { type: "string" } } },
     },
+  },
   {
+
     type: "function",
     function: {
       name: "get_toppings",
