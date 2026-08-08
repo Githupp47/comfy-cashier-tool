@@ -277,7 +277,17 @@ serve(async (req) => {
           let q: any = supabase.from("products").select("name, stock_quantity, is_available");
           if (args.product_name) q = q.ilike("name", `%${args.product_name}%`);
           const { data: prods } = await q;
-          result = { stock: prods ?? [] };
+          // ซ่อนตัวเลขสต็อกจากบอท เพื่อไม่ให้หลุดไปบอกลูกค้า
+          result = {
+            note: "ห้ามบอกตัวเลขจำนวนคงเหลือกับลูกค้า",
+            stock: (prods ?? []).map((p: any) => ({
+              name: p.name,
+              available: p.is_available && (p.stock_quantity ?? 0) > 0,
+              level: (p.stock_quantity ?? 0) <= 0 ? "out" : (p.stock_quantity ?? 0) <= 5 ? "low" : "ok",
+              max_orderable: p.is_available ? (p.stock_quantity ?? 0) : 0,
+            })),
+          };
+
         } else if (name === "get_toppings") {
           const { data: tops } = await (supabase.from as any)("toppings")
             .select("id, name, price, stock_quantity, is_available")
