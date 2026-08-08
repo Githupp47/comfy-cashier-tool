@@ -19,7 +19,43 @@ const COURIERS: { value: string; label: string; url?: (t: string) => string }[] 
 export function ShippingPanel({ order, queryClient }: { order: any; queryClient: any }) {
   const [courier, setCourier] = useState<string>(order.courier || "self");
   const [tracking, setTracking] = useState<string>(order.tracking_number || "");
+  const [fee, setFee] = useState<string>(String(order.shipping_fee ?? 0));
   const [saving, setSaving] = useState(false);
+  const [savingFee, setSavingFee] = useState(false);
+
+  // หา session แชทของออเดอร์นี้ (เว็บหรือไลน์) เพื่อส่งข้อความให้ถูกช่อง
+  const findSession = async () => {
+    const { data } = await supabase
+      .from("chat_messages")
+      .select("session_id, platform, line_user_id")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data ?? null;
+  };
+
+  const saveFee = async () => {
+    const f = Math.max(0, Number(fee) || 0);
+    const itemsTotal = Math.max(0, Number(order.total_amount || 0) - Number(order.shipping_fee || 0));
+    setSavingFee(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ shipping_fee: f, total_amount: itemsTotal + f } as any)
+      .eq("id", order.id);
+    setSavingFee(false);
+    if (error) return toast.error(error.message);
+
+    const s = await findSession();
+    await supabase.from("chat_messages").insert({
+      order_id: order.id,
+      sender_type: "admin",
+      message: `🚚 ค่าจัดส่งออเดอร์ #${String(order.id).slice(0, 8)} = ฿${f.toLocaleString()}\nยอดรวมที่ต้องโอน: ฿${(itemsTotal + f).toLocaleString()}`,
+      ...(s ? { session_id: s.session_id, platform: s.platform, line_user_id: s.line_user_id } : {}),
+    } as any);
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    toast.success("บันทึกค่าส่ง & แจ้งลูกค้าแล้ว");
+  };
 
   const save = async () => {
     setSaving(true);
@@ -33,15 +69,18 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
     if (error) return toast.error(error.message);
 
     if (tracking.trim()) {
+      const s = await findSession();
       await supabase.from("chat_messages").insert({
         order_id: order.id,
         sender_type: "admin",
         message: `📦 เลขพัสดุของคุณ: ${tracking.trim()} (${preset?.label ?? courier})${url ? `\nติดตามที่: ${url}` : ""}`,
-      });
+        ...(s ? { session_id: s.session_id, platform: s.platform, line_user_id: s.line_user_id } : {}),
+      } as any);
     }
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("บันทึกข้อมูลจัดส่งแล้ว");
   };
+
 
   const steps = [
     { key: "confirmed", label: "ยืนยัน", at: order.slip_verified_at },
@@ -98,7 +137,23 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
           </Button>
         )}
       </div>
-      {order.shipping_zone && <p className="text-[11px] text-muted-foreground">โซนจัดส่ง: {order.shipping_zone} · ค่าส่ง ฿{Number(order.shipping_fee || 0).toLocaleString()}</p>}
+
+      {/* ค่าส่งกรอกเอง (คิดแยกจากค่าสินค้า) */}
+      <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-border/60">
+        <div className="space-y-1">
+          <Label className="text-[11px]">ค่าส่ง (บาท) — กรอกเอง</Label>
+          <Input className="h-9 w-32 rounded-lg text-sm" type="number" min="0" value={fee}
+            onChange={(e) => setFee(e.target.value)} placeholder="เช่น 40" />
+        </div>
+        <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5" onClick={saveFee} disabled={savingFee}>
+          <Save className="h-3.5 w-3.5" /> บันทึกค่าส่ง & แจ้งลูกค้า
+        </Button>
+        <p className="text-[11px] text-muted-foreground w-full">
+          ค่าสินค้า ฿{(Number(order.total_amount || 0) - Number(order.shipping_fee || 0)).toLocaleString()} + ค่าส่ง ฿{Number(order.shipping_fee || 0).toLocaleString()} = รวม ฿{Number(order.total_amount || 0).toLocaleString()}
+          {order.shipping_zone ? ` · โซน: ${order.shipping_zone}` : ""}
+        </p>
+      </div>
+
     </div>
   );
 }

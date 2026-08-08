@@ -6,21 +6,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEFAULT_PROMPT = `คุณเป็นพนักงานร้าน HAKKŌ ร้านข้าวไอติม & เชื้อโคจิ ตอบภาษาไทยสุภาพ เป็นกันเอง
+const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HAKKŌ" (ข้าวไอติม & เชื้อโคจิ) คุยกับลูกค้าเหมือนคนจริง ๆ ภาษาไทยสุภาพ เป็นกันเอง ไม่ใช่หุ่นยนต์
 
-🚫 ขอบเขต: ตอบเฉพาะเรื่องร้าน (สินค้า ราคา สต็อก ท็อปปิ้ง สั่งซื้อ ชำระเงิน จัดส่ง). ถ้าถามเรื่องอื่นให้ตอบ "ขอโทษค่ะ ตอบได้เฉพาะเรื่องสินค้าของร้าน HAKKŌ นะคะ 🙏"
+🚫 ขอบเขต: ตอบเฉพาะเรื่องร้าน (สินค้า ราคา ท็อปปิ้ง สั่งซื้อ ชำระเงิน จัดส่ง) เรื่องอื่นตอบว่า "ขอโทษค่ะ ตอบได้เฉพาะเรื่องสินค้าของร้าน HAKKŌ นะคะ 🙏"
 
-✍️ รูปแบบ: สั้น 1-3 บรรทัด ใช้ emoji เล็กน้อย ใช้ bullet (•) เมื่อมีหลายข้อ
+✍️ สไตล์: สั้น 1-3 บรรทัด เป็นธรรมชาติ ไม่ยัดข้อมูลทีเดียวเยอะ ถามทีละอย่าง ใช้ bullet (•) เฉพาะตอนลิสต์เมนู
 
-📦 กฎเรื่องสต็อก (สำคัญมาก):
-- ก่อนแนะนำ/รับออเดอร์สินค้าใดๆ ต้องเรียก get_products หรือ check_stock ทุกครั้ง
-- ถ้า stock_quantity = 0 หรือ is_available = false → ตอบทันทีว่า "❌ [ชื่อ] หมดค่ะ 🙏" ห้ามรับออเดอร์
-- ถ้าลูกค้าสั่งจำนวนเกินสต็อก → บอกยอดคงเหลือ เสนอลดจำนวนหรือสินค้าอื่น
-- ท็อปปิ้งก็เช่นกัน เช็ค get_toppings ก่อน
+📦 สต็อก (ห้ามพลาด):
+- ก่อนแนะนำหรือรับออเดอร์ ต้องเรียก get_products / check_stock ทุกครั้ง
+- ❌ ห้ามบอกตัวเลขสต็อกให้ลูกค้าเด็ดขาด (ห้ามพูดว่า "เหลือ 5 ชิ้น") ให้พูดแค่ "มีค่ะ" / "พอมีค่ะ" / "หมดพอดีเลยค่ะ 🙏"
+- ถ้าของหมดหรือปิดขาย → บอกว่าหมด และเสนอเมนูอื่นแทน ห้ามรับออเดอร์
+- ถ้าสั่งเกินที่มี → บอกแบบนุ่ม ๆ ว่า "วันนี้ทำได้ไม่ถึงจำนวนนี้ค่ะ" แล้วเสนอจำนวนที่ทำได้ (ไม่ต้องบอกตัวเลขคงเหลือจริง)
+- ท็อปปิ้งเช็ค get_toppings ก่อนเสมอ
 
-🛠️ เครื่องมือ: get_products, send_product_image, get_toppings, check_stock, get_sales_summary(แอดมิน), create_order(หลังได้ ชื่อ+เบอร์+ที่อยู่)
-- สั่งซื้อสำเร็จ → แจ้งเลขออเดอร์+ยอดรวม+ช่องทางโอน
-- ลูกค้าส่งสลิป → ยืนยันรับ บอกให้รอแอดมินตรวจ`;
+💸 การเงิน (สำคัญ):
+- ❌ ห้ามส่งเลขบัญชี/QR ทันทีที่ทัก ต้องยืนยันเมนู จำนวน ท็อปปิ้ง ชื่อ เบอร์ ที่อยู่ และสร้างออเดอร์ก่อน แล้วค่อยแจ้งช่องทางโอนเมื่อลูกค้าพร้อมจ่าย
+- 🚚 ค่าส่ง: คิดแยกจากค่าสินค้า บอทห้ามคิด/ห้ามเดาค่าส่งเอง ให้บอกว่า "ค่าส่งแอดมินจะเช็คตามพื้นที่แล้วแจ้งอีกทีนะคะ" — ยอดที่แจ้งคือค่าสินค้าอย่างเดียว
+- ลูกค้าส่งสลิป → ขอบคุณ บอกว่ากำลังตรวจสอบให้ รอสักครู่นะคะ (ระบบตรวจอัตโนมัติ)
+
+🛠️ เครื่องมือ: get_products, send_product_image, get_toppings, check_stock, get_sales_summary(แอดมิน), create_order(ใช้เมื่อได้ ชื่อ+เบอร์+รายการครบ)
+- สั่งสำเร็จ → แจ้งเลขออเดอร์ + ยอดค่าสินค้า + ย้ำว่าค่าส่งแจ้งภายหลัง`;
+
 
 async function pushLineMessage(token: string, to: string, text: string) {
   await fetch("https://api.line.me/v2/bot/message/push", {
@@ -79,7 +85,9 @@ const tools = [
       description: "ตรวจสอบสต็อกสินค้า (ใส่ชื่อสินค้าถ้ามี ไม่ใส่จะคืนทุกตัว)",
       parameters: { type: "object", properties: { product_name: { type: "string" } } },
     },
+  },
   {
+
     type: "function",
     function: {
       name: "get_toppings",
@@ -269,7 +277,17 @@ serve(async (req) => {
           let q: any = supabase.from("products").select("name, stock_quantity, is_available");
           if (args.product_name) q = q.ilike("name", `%${args.product_name}%`);
           const { data: prods } = await q;
-          result = { stock: prods ?? [] };
+          // ซ่อนตัวเลขสต็อกจากบอท เพื่อไม่ให้หลุดไปบอกลูกค้า
+          result = {
+            note: "ห้ามบอกตัวเลขจำนวนคงเหลือกับลูกค้า",
+            stock: (prods ?? []).map((p: any) => ({
+              name: p.name,
+              available: p.is_available && (p.stock_quantity ?? 0) > 0,
+              level: (p.stock_quantity ?? 0) <= 0 ? "out" : (p.stock_quantity ?? 0) <= 5 ? "low" : "ok",
+              max_orderable: p.is_available ? (p.stock_quantity ?? 0) : 0,
+            })),
+          };
+
         } else if (name === "get_toppings") {
           const { data: tops } = await (supabase.from as any)("toppings")
             .select("id, name, price, stock_quantity, is_available")
@@ -319,8 +337,9 @@ serve(async (req) => {
                   customer_name: args.customer_name,
                   customer_phone: args.customer_phone,
                   dormitory_map_link: args.address || null,
-                  note: args.note || "สั่งผ่านแชทบอท",
+                  note: (args.note ? args.note + " | " : "") + `สั่งผ่านแชทบอท (${platform})`,
                   total_amount: total,
+                  shipping_fee: 0,
                   status: "pending",
                 })
                 .select().single();
@@ -338,14 +357,29 @@ serve(async (req) => {
               }
               const { error: iErr } = await supabase.from("order_items").insert(rows);
               if (iErr) throw iErr;
+
+              // ผูกเบอร์/ชื่อลูกค้าเข้ากับ session แชท (ใช้จับคู่สลิปจาก LINE ภายหลัง)
+              await supabase.from("chat_messages").insert({
+                session_id,
+                sender_type: "bot",
+                message: `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${total} บาท ยังไม่รวมค่าส่ง)`,
+                platform,
+                line_user_id: lineUserId,
+                customer_phone: args.customer_phone,
+                customer_name: args.customer_name,
+                order_id: order.id,
+              });
+
               result = {
                 ok: true,
                 order_id: order.id,
                 short_id: order.id.slice(0, 8),
-                total_baht: total,
+                items_total_baht: total,
+                shipping_fee: "ยังไม่คิด — แอดมินจะแจ้งค่าส่งภายหลัง ห้ามบอทเดาเอง",
                 items: resolvedItems.length,
                 missing,
               };
+
             }
           } catch (e: any) {
             result = { ok: false, error: e.message };
