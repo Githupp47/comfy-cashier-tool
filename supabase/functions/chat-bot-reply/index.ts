@@ -337,8 +337,9 @@ serve(async (req) => {
                   customer_name: args.customer_name,
                   customer_phone: args.customer_phone,
                   dormitory_map_link: args.address || null,
-                  note: args.note || "สั่งผ่านแชทบอท",
+                  note: (args.note ? args.note + " | " : "") + `สั่งผ่านแชทบอท (${platform})`,
                   total_amount: total,
+                  shipping_fee: 0,
                   status: "pending",
                 })
                 .select().single();
@@ -356,14 +357,29 @@ serve(async (req) => {
               }
               const { error: iErr } = await supabase.from("order_items").insert(rows);
               if (iErr) throw iErr;
+
+              // ผูกเบอร์/ชื่อลูกค้าเข้ากับ session แชท (ใช้จับคู่สลิปจาก LINE ภายหลัง)
+              await supabase.from("chat_messages").insert({
+                session_id,
+                sender_type: "bot",
+                message: `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${total} บาท ยังไม่รวมค่าส่ง)`,
+                platform,
+                line_user_id: lineUserId,
+                customer_phone: args.customer_phone,
+                customer_name: args.customer_name,
+                order_id: order.id,
+              });
+
               result = {
                 ok: true,
                 order_id: order.id,
                 short_id: order.id.slice(0, 8),
-                total_baht: total,
+                items_total_baht: total,
+                shipping_fee: "ยังไม่คิด — แอดมินจะแจ้งค่าส่งภายหลัง ห้ามบอทเดาเอง",
                 items: resolvedItems.length,
                 missing,
               };
+
             }
           } catch (e: any) {
             result = { ok: false, error: e.message };
