@@ -104,26 +104,40 @@ Deno.serve(async (req) => {
           attachment_url: slipUrl, attachment_type: "image", attachment_name: "slip.jpg",
         });
 
-        // Find latest unverified order for this LINE user (via customer_phone in past chat)
-        const { data: msgs } = await supabase.from("chat_messages")
-          .select("customer_phone").eq("line_user_id", lineUserId)
-          .not("customer_phone", "is", null)
-          .order("created_at", { ascending: false }).limit(1);
-        const phone = msgs?.[0]?.customer_phone;
-
+        // 1) หาออเดอร์จากที่บอทผูกไว้ใน session แชทนี้
         let orderId: string | null = null;
-        if (phone) {
-          const { data: ord } = await supabase.from("orders")
-            .select("id").eq("customer_phone", phone)
-            .in("slip_status", ["pending", "needs_review", "rejected"])
-            .order("created_at", { ascending: false }).limit(1).maybeSingle();
-          if (ord) {
-            orderId = ord.id;
-            await supabase.from("orders").update({
-              slip_url: slipUrl, slip_status: "pending", slip_reject_reason: null,
-            }).eq("id", orderId);
+        const { data: linked } = await supabase.from("chat_messages")
+          .select("order_id").eq("session_id", sessionId)
+          .not("order_id", "is", null)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (linked?.order_id) {
+          const { data: o } = await supabase.from("orders")
+            .select("id, slip_status").eq("id", linked.order_id).maybeSingle();
+          if (o && ["pending", "needs_review", "rejected"].includes(o.slip_status ?? "pending")) orderId = o.id;
+        }
+
+        // 2) ถ้าไม่มี ลองหาจากเบอร์โทรที่เคยแจ้งไว้ในแชท LINE
+        if (!orderId) {
+          const { data: msgs } = await supabase.from("chat_messages")
+            .select("customer_phone").eq("line_user_id", lineUserId)
+            .not("customer_phone", "is", null)
+            .order("created_at", { ascending: false }).limit(1);
+          const phone = msgs?.[0]?.customer_phone;
+          if (phone) {
+            const { data: ord } = await supabase.from("orders")
+              .select("id").eq("customer_phone", phone)
+              .in("slip_status", ["pending", "needs_review", "rejected"])
+              .order("created_at", { ascending: false }).limit(1).maybeSingle();
+            if (ord) orderId = ord.id;
           }
         }
+
+        if (orderId) {
+          await supabase.from("orders").update({
+            slip_url: slipUrl, slip_status: "pending", slip_reject_reason: null,
+          }).eq("id", orderId);
+        }
+
 
         if (orderId) {
           await pushLine(integ.channel_access_token, lineUserId,
