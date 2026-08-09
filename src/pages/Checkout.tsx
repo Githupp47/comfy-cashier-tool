@@ -62,7 +62,6 @@ export default function Checkout() {
   const bankName = settings?.payment_bank_name || "SCB (ไทยพาณิชย์)";
   const bankAccount = settings?.payment_bank_account || "4230504802";
 
-  const shippingFlat = Math.max(0, Number(settings?.shipping_fee_flat) || 0);
   const freeThreshold = Math.max(0, Number(settings?.shipping_free_threshold) || 0);
 
   const zones: { name: string; fee: number }[] = useMemo(() => {
@@ -73,10 +72,12 @@ export default function Checkout() {
   }, [settings]);
 
   const selectedZone = zones.find((z) => z.name === zoneName) || null;
-  const baseShipping = zones.length > 0 ? Math.max(0, Number(selectedZone?.fee) || 0) : shippingFlat;
+  // คิดค่าส่งตามโซนเท่านั้น (ไม่มีเหมา) — ถ้าไม่มีโซน ให้แอดมินกรอกค่าส่งภายหลัง
+  const baseShipping = Math.max(0, Number(selectedZone?.fee) || 0);
   const freeByThreshold = freeThreshold > 0 && subTotal >= freeThreshold;
   const shippingFee = freeByThreshold ? 0 : baseShipping;
   const grandTotal = subTotal + shippingFee;
+
 
   const copyAccount = () => {
     navigator.clipboard.writeText(bankAccount);
@@ -229,10 +230,15 @@ export default function Checkout() {
                       <span className="font-medium">฿{shippingFee.toLocaleString()}</span>
                     ) : (
                       <span className="font-medium text-green-600">
-                        {zones.length > 0 && !selectedZone ? "— เลือกโซนก่อน" : `ฟรี ${freeByThreshold ? "(ครบยอดขั้นต่ำ)" : ""}`}
+                        {zones.length === 0
+                          ? "รอแอดมินแจ้งค่าส่ง"
+                          : !selectedZone
+                            ? "— เลือกโซนก่อน"
+                            : `ฟรี ${freeByThreshold ? "(ครบยอดขั้นต่ำ)" : ""}`}
                       </span>
                     )}
                   </div>
+
                   {freeThreshold > 0 && baseShipping > 0 && subTotal < freeThreshold && (
                     <p className="text-xs text-muted-foreground">
                       💡 สั่งเพิ่มอีก ฿{(freeThreshold - subTotal).toLocaleString()} เพื่อรับส่งฟรี

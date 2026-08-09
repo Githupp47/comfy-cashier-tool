@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Save, Copy } from "lucide-react";
+import { Truck, Save, Copy, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 const COURIERS: { value: string; label: string; url?: (t: string) => string }[] = [
@@ -57,26 +57,45 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
     toast.success("บันทึกค่าส่ง & แจ้งลูกค้าแล้ว");
   };
 
+  // สร้างเลขติดตามของร้านเอง เช่น HK-260809-A1B2
+  const genTracking = () => {
+    const d = new Date();
+    const ymd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const suffix = String(order.id).replace(/-/g, "").slice(0, 4).toUpperCase();
+    const rnd = Math.random().toString(36).slice(2, 4).toUpperCase();
+    setTracking(`HK-${ymd}-${suffix}${rnd}`);
+    toast.success("สร้างเลขติดตามแล้ว กด “บันทึก & แจ้งลูกค้า”");
+  };
+
   const save = async () => {
+
     setSaving(true);
     const preset = COURIERS.find((c) => c.value === courier);
-    const url = preset?.url && tracking.trim() ? preset.url(tracking.trim()) : null;
+    const trk = tracking.trim();
+    // เลขของร้านเอง (ส่งเอง/แกร็บ หรือขึ้นต้น HK-) ให้ลูกค้าค้นในเว็บร้าน
+    const isShopCode = /^HK-/i.test(trk) || !preset?.url;
+    const url = trk
+      ? isShopCode
+        ? `${window.location.origin}/track?tracking=${encodeURIComponent(trk)}`
+        : preset!.url!(trk)
+      : null;
     const { error } = await supabase
       .from("orders")
-      .update({ courier, tracking_number: tracking.trim() || null, tracking_url: url } as any)
+      .update({ courier, tracking_number: trk || null, tracking_url: url } as any)
       .eq("id", order.id);
     setSaving(false);
     if (error) return toast.error(error.message);
 
-    if (tracking.trim()) {
+    if (trk) {
       const s = await findSession();
       await supabase.from("chat_messages").insert({
         order_id: order.id,
         sender_type: "admin",
-        message: `📦 เลขพัสดุของคุณ: ${tracking.trim()} (${preset?.label ?? courier})${url ? `\nติดตามที่: ${url}` : ""}`,
+        message: `📦 เลขติดตามพัสดุของคุณ: ${trk} (${preset?.label ?? courier})${url ? `\nตรวจสอบสถานะที่: ${url}` : ""}`,
         ...(s ? { session_id: s.session_id, platform: s.platform, line_user_id: s.line_user_id } : {}),
       } as any);
     }
+
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("บันทึกข้อมูลจัดส่งแล้ว");
   };
@@ -124,12 +143,18 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
           </Select>
         </div>
         <div className="space-y-1 flex-1 min-w-[150px]">
-          <Label className="text-[11px]">เลขพัสดุ</Label>
-          <Input className="h-9 rounded-lg text-sm" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="เช่น TH01234567" />
+          <Label className="text-[11px]">เลขพัสดุ / เลขติดตามของร้าน</Label>
+          <div className="flex gap-1.5">
+            <Input className="h-9 rounded-lg text-sm" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="เช่น HK-260809-A1B2" />
+            <Button type="button" size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 shrink-0" onClick={genTracking}>
+              <Wand2 className="h-3.5 w-3.5" /> สร้างเลข
+            </Button>
+          </div>
         </div>
         <Button size="sm" className="h-9 rounded-xl gap-1.5" onClick={save} disabled={saving}>
           <Save className="h-3.5 w-3.5" /> บันทึก & แจ้งลูกค้า
         </Button>
+
         {order.tracking_url && (
           <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5"
             onClick={() => { navigator.clipboard.writeText(order.tracking_url); toast.success("คัดลอกลิงก์ติดตามแล้ว"); }}>

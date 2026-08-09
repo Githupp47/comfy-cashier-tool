@@ -146,19 +146,15 @@ export function ShopSettings() {
         <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Truck className="h-4 w-4 text-primary" /> ค่าจัดส่ง</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label className="text-sm font-medium">ค่าส่งแบบเหมา (บาท)</Label>
-            <Input className="rounded-xl" type="number" min="0" value={form.shipping_fee_flat ?? ""} onChange={(e) => setForm({ ...form, shipping_fee_flat: e.target.value })} placeholder="เช่น 30" />
-            <p className="text-xs text-muted-foreground">คิดค่าส่งเท่ากันทุกออเดอร์ ตั้งเป็น 0 หากไม่คิดค่าส่ง</p>
-          </div>
-          <div className="space-y-2">
             <Label className="text-sm font-medium">ยอดขั้นต่ำส่งฟรี (บาท)</Label>
             <Input className="rounded-xl" type="number" min="0" value={form.shipping_free_threshold ?? ""} onChange={(e) => setForm({ ...form, shipping_free_threshold: e.target.value })} placeholder="เช่น 300" />
             <p className="text-xs text-muted-foreground">เมื่อยอดสินค้าถึงจำนวนนี้ ระบบจะยกเว้นค่าส่งอัตโนมัติ ตั้งเป็น 0 = ปิดฟีเจอร์</p>
           </div>
 
           <div className="space-y-2 pt-2 border-t border-border/60">
-            <Label className="text-sm font-medium">โซนจัดส่ง (คิดค่าส่งตามพื้นที่)</Label>
-            <p className="text-xs text-muted-foreground">ถ้ามีโซน ลูกค้าต้องเลือกโซนก่อนชำระเงิน และระบบจะใช้ค่าส่งของโซนนั้นแทนค่าส่งเหมา</p>
+            <Label className="text-sm font-medium">โซนจัดส่ง (คิดค่าส่งตามพื้นที่) *</Label>
+            <p className="text-xs text-muted-foreground">ระบบคิดค่าส่งตามโซนเท่านั้น (ไม่มีค่าส่งเหมา) ลูกค้าต้องเลือกโซนก่อนชำระเงิน ถ้ายังไม่ตั้งโซน ระบบจะให้แอดมินกรอกค่าส่งเองภายหลัง</p>
+
             {zones.map((z, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input className="rounded-xl flex-1" value={z.name} placeholder="ชื่อโซน เช่น หอพัก A / ในเมือง"

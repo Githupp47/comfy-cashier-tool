@@ -33,14 +33,15 @@ export default function TrackOrder() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const search = async () => {
-    if (!phone.trim()) return toast.error("กรุณากรอกเบอร์โทร");
+  const search = async (override?: string) => {
+    const q = (override ?? phone).trim();
+    if (!q) return toast.error("กรุณากรอกเบอร์โทร หรือเลขติดตาม");
     setLoading(true);
     setSearched(true);
     const { data, error } = await supabase
       .from("orders")
       .select("*, order_items(*)")
-      .eq("customer_phone", phone.trim())
+      .or(`customer_phone.eq.${q},tracking_number.eq.${q}`)
       .order("created_at", { ascending: false });
     setLoading(false);
     if (error) {
@@ -51,11 +52,15 @@ export default function TrackOrder() {
   };
 
   useEffect(() => {
-    if (searchParams.get("phone")) {
-      search();
+    const t = searchParams.get("tracking") || searchParams.get("phone");
+    if (t) {
+      setPhone(t);
+      search(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
 
   return (
     <div className="min-h-screen bg-background pb-12">
@@ -69,12 +74,13 @@ export default function TrackOrder() {
           <CardContent className="p-4 flex gap-2">
             <Input
               className="rounded-xl flex-1"
-              placeholder="กรอกเบอร์โทรศัพท์..."
+              placeholder="กรอกเบอร์โทร หรือเลขติดตาม เช่น HK-260809-A1B2"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
             />
-            <Button className="rounded-xl" onClick={search} disabled={loading}>
+            <Button className="rounded-xl" onClick={() => search()} disabled={loading}>
+
               {loading ? "..." : "ค้นหา"}
             </Button>
           </CardContent>
