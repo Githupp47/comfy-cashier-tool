@@ -71,23 +71,31 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
 
     setSaving(true);
     const preset = COURIERS.find((c) => c.value === courier);
-    const url = preset?.url && tracking.trim() ? preset.url(tracking.trim()) : null;
+    const trk = tracking.trim();
+    // เลขของร้านเอง (ส่งเอง/แกร็บ หรือขึ้นต้น HK-) ให้ลูกค้าค้นในเว็บร้าน
+    const isShopCode = /^HK-/i.test(trk) || !preset?.url;
+    const url = trk
+      ? isShopCode
+        ? `${window.location.origin}/track?tracking=${encodeURIComponent(trk)}`
+        : preset!.url!(trk)
+      : null;
     const { error } = await supabase
       .from("orders")
-      .update({ courier, tracking_number: tracking.trim() || null, tracking_url: url } as any)
+      .update({ courier, tracking_number: trk || null, tracking_url: url } as any)
       .eq("id", order.id);
     setSaving(false);
     if (error) return toast.error(error.message);
 
-    if (tracking.trim()) {
+    if (trk) {
       const s = await findSession();
       await supabase.from("chat_messages").insert({
         order_id: order.id,
         sender_type: "admin",
-        message: `📦 เลขพัสดุของคุณ: ${tracking.trim()} (${preset?.label ?? courier})${url ? `\nติดตามที่: ${url}` : ""}`,
+        message: `📦 เลขติดตามพัสดุของคุณ: ${trk} (${preset?.label ?? courier})${url ? `\nตรวจสอบสถานะที่: ${url}` : ""}`,
         ...(s ? { session_id: s.session_id, platform: s.platform, line_user_id: s.line_user_id } : {}),
       } as any);
     }
+
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("บันทึกข้อมูลจัดส่งแล้ว");
   };
