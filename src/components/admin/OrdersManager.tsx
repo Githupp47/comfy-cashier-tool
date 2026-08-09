@@ -222,7 +222,9 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
             <SelectItem value="cancelled">❌ ยกเลิก</SelectItem>
           </SelectContent>
         </Select>
+        </div>
       </div>
+
 
       <Card className="border-border">
         <CardContent className="p-3 flex flex-wrap items-end gap-3">
