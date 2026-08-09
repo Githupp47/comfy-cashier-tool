@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
 import { ShippingPanel } from "./ShippingPanel";
+import { ManualSaleDialog } from "./ManualSaleDialog";
 
 type Order = Tables<"orders"> & { slip_status?: string | null; slip_data?: any; slip_reject_reason?: string | null };
 
@@ -203,6 +204,13 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
           <h2 className="text-xl font-bold text-foreground">🛒 จัดการออเดอร์</h2>
           <p className="text-sm text-muted-foreground">{orders.length} ออเดอร์ทั้งหมด</p>
         </div>
+        <div className="flex items-center gap-2">
+        <ManualSaleDialog onDone={() => {
+          queryClient?.invalidateQueries({ queryKey: ["admin-orders"] });
+          queryClient?.invalidateQueries({ queryKey: ["dashboard-order-items"] });
+          queryClient?.invalidateQueries({ queryKey: ["dashboard-products"] });
+          queryClient?.invalidateQueries({ queryKey: ["admin-products"] });
+        }} />
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-[160px] rounded-xl"><SelectValue placeholder="กรองสถานะ" /></SelectTrigger>
           <SelectContent>
@@ -215,7 +223,9 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
             <SelectItem value="cancelled">❌ ยกเลิก</SelectItem>
           </SelectContent>
         </Select>
+        </div>
       </div>
+
 
       <Card className="border-border">
         <CardContent className="p-3 flex flex-wrap items-end gap-3">
