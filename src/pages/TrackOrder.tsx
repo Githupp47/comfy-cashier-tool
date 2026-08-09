@@ -34,13 +34,14 @@ export default function TrackOrder() {
   const [searched, setSearched] = useState(false);
 
   const search = async () => {
-    if (!phone.trim()) return toast.error("กรุณากรอกเบอร์โทร");
+    const q = phone.trim();
+    if (!q) return toast.error("กรุณากรอกเบอร์โทร หรือเลขติดตาม");
     setLoading(true);
     setSearched(true);
     const { data, error } = await supabase
       .from("orders")
       .select("*, order_items(*)")
-      .eq("customer_phone", phone.trim())
+      .or(`customer_phone.eq.${q},tracking_number.eq.${q}`)
       .order("created_at", { ascending: false });
     setLoading(false);
     if (error) {
@@ -49,6 +50,7 @@ export default function TrackOrder() {
     }
     setOrders(data || []);
   };
+
 
   useEffect(() => {
     if (searchParams.get("phone")) {
