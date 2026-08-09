@@ -124,12 +124,18 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
           </Select>
         </div>
         <div className="space-y-1 flex-1 min-w-[150px]">
-          <Label className="text-[11px]">เลขพัสดุ</Label>
-          <Input className="h-9 rounded-lg text-sm" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="เช่น TH01234567" />
+          <Label className="text-[11px]">เลขพัสดุ / เลขติดตามของร้าน</Label>
+          <div className="flex gap-1.5">
+            <Input className="h-9 rounded-lg text-sm" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="เช่น HK-260809-A1B2" />
+            <Button type="button" size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 shrink-0" onClick={genTracking}>
+              <Wand2 className="h-3.5 w-3.5" /> สร้างเลข
+            </Button>
+          </div>
         </div>
         <Button size="sm" className="h-9 rounded-xl gap-1.5" onClick={save} disabled={saving}>
           <Save className="h-3.5 w-3.5" /> บันทึก & แจ้งลูกค้า
         </Button>
+
         {order.tracking_url && (
           <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5"
             onClick={() => { navigator.clipboard.writeText(order.tracking_url); toast.success("คัดลอกลิงก์ติดตามแล้ว"); }}>
