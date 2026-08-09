@@ -33,8 +33,8 @@ export default function TrackOrder() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const search = async () => {
-    const q = phone.trim();
+  const search = async (override?: string) => {
+    const q = (override ?? phone).trim();
     if (!q) return toast.error("กรุณากรอกเบอร์โทร หรือเลขติดตาม");
     setLoading(true);
     setSearched(true);
@@ -51,15 +51,15 @@ export default function TrackOrder() {
     setOrders(data || []);
   };
 
-
   useEffect(() => {
-    const t = searchParams.get("tracking");
-    if (t) setPhone(t);
-    if (searchParams.get("phone") || t) {
-      setTimeout(search, 0);
+    const t = searchParams.get("tracking") || searchParams.get("phone");
+    if (t) {
+      setPhone(t);
+      search(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
 
   return (
