@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Save, Copy } from "lucide-react";
+import { Truck, Save, Copy, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 const COURIERS: { value: string; label: string; url?: (t: string) => string }[] = [
@@ -57,7 +57,18 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
     toast.success("บันทึกค่าส่ง & แจ้งลูกค้าแล้ว");
   };
 
+  // สร้างเลขติดตามของร้านเอง เช่น HK-260809-A1B2
+  const genTracking = () => {
+    const d = new Date();
+    const ymd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const suffix = String(order.id).replace(/-/g, "").slice(0, 4).toUpperCase();
+    const rnd = Math.random().toString(36).slice(2, 4).toUpperCase();
+    setTracking(`HK-${ymd}-${suffix}${rnd}`);
+    toast.success("สร้างเลขติดตามแล้ว กด “บันทึก & แจ้งลูกค้า”");
+  };
+
   const save = async () => {
+
     setSaving(true);
     const preset = COURIERS.find((c) => c.value === courier);
     const url = preset?.url && tracking.trim() ? preset.url(tracking.trim()) : null;
