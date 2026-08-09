@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
 import { ShippingPanel } from "./ShippingPanel";
+import { ManualSaleDialog } from "./ManualSaleDialog";
 
 type Order = Tables<"orders"> & { slip_status?: string | null; slip_data?: any; slip_reject_reason?: string | null };
 
