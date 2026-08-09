@@ -230,10 +230,15 @@ export default function Checkout() {
                       <span className="font-medium">฿{shippingFee.toLocaleString()}</span>
                     ) : (
                       <span className="font-medium text-green-600">
-                        {zones.length > 0 && !selectedZone ? "— เลือกโซนก่อน" : `ฟรี ${freeByThreshold ? "(ครบยอดขั้นต่ำ)" : ""}`}
+                        {zones.length === 0
+                          ? "รอแอดมินแจ้งค่าส่ง"
+                          : !selectedZone
+                            ? "— เลือกโซนก่อน"
+                            : `ฟรี ${freeByThreshold ? "(ครบยอดขั้นต่ำ)" : ""}`}
                       </span>
                     )}
                   </div>
+
                   {freeThreshold > 0 && baseShipping > 0 && subTotal < freeThreshold && (
                     <p className="text-xs text-muted-foreground">
                       💡 สั่งเพิ่มอีก ฿{(freeThreshold - subTotal).toLocaleString()} เพื่อรับส่งฟรี
