@@ -203,6 +203,13 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
           <h2 className="text-xl font-bold text-foreground">🛒 จัดการออเดอร์</h2>
           <p className="text-sm text-muted-foreground">{orders.length} ออเดอร์ทั้งหมด</p>
         </div>
+        <div className="flex items-center gap-2">
+        <ManualSaleDialog onDone={() => {
+          queryClient?.invalidateQueries({ queryKey: ["admin-orders"] });
+          queryClient?.invalidateQueries({ queryKey: ["dashboard-order-items"] });
+          queryClient?.invalidateQueries({ queryKey: ["dashboard-products"] });
+          queryClient?.invalidateQueries({ queryKey: ["admin-products"] });
+        }} />
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-[160px] rounded-xl"><SelectValue placeholder="กรองสถานะ" /></SelectTrigger>
           <SelectContent>
