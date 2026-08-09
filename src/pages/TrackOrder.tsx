@@ -74,12 +74,13 @@ export default function TrackOrder() {
           <CardContent className="p-4 flex gap-2">
             <Input
               className="rounded-xl flex-1"
-              placeholder="กรอกเบอร์โทรศัพท์..."
+              placeholder="กรอกเบอร์โทร หรือเลขติดตาม เช่น HK-260809-A1B2"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
             />
-            <Button className="rounded-xl" onClick={search} disabled={loading}>
+            <Button className="rounded-xl" onClick={() => search()} disabled={loading}>
+
               {loading ? "..." : "ค้นหา"}
             </Button>
           </CardContent>
