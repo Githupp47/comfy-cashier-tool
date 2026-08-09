@@ -53,11 +53,14 @@ export default function TrackOrder() {
 
 
   useEffect(() => {
-    if (searchParams.get("phone")) {
-      search();
+    const t = searchParams.get("tracking");
+    if (t) setPhone(t);
+    if (searchParams.get("phone") || t) {
+      setTimeout(search, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   return (
     <div className="min-h-screen bg-background pb-12">
