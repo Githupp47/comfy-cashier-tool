@@ -99,6 +99,16 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
     }
   };
 
+  // ส่งข้อความหาลูกค้าทุกช่องทาง (เว็บ / LINE / FB / IG) ผ่านฟังก์ชันกลาง
+  const notifyCustomer = async (orderId: string, message: string) => {
+    const { error } = await supabase.functions.invoke("notify-customer", {
+      body: { order_id: orderId, message },
+    });
+    if (error) {
+      await supabase.from("chat_messages").insert({ order_id: orderId, sender_type: "admin", message });
+    }
+  };
+
   const approveSlip = async (orderId: string) => {
     const { error } = await supabase.from("orders").update({
       slip_status: "approved",
@@ -106,10 +116,7 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
       status: "confirmed",
     } as any).eq("id", orderId);
     if (error) return toast.error(error.message);
-    await supabase.from("chat_messages").insert({
-      order_id: orderId, sender_type: "admin",
-      message: "✅ ยืนยันการชำระเงินเรียบร้อยค่ะ กำลังเตรียมออเดอร์ให้นะคะ 🙏",
-    });
+    await notifyCustomer(orderId, `✅ ออเดอร์ #${orderId.slice(0, 8)}\nยืนยันการชำระเงินเรียบร้อยค่ะ กำลังเตรียมออเดอร์ให้นะคะ 🙏`);
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("อนุมัติสลิปแล้ว");
   };
@@ -122,14 +129,12 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
       slip_verified_at: new Date().toISOString(),
     } as any).eq("id", orderId);
     if (error) return toast.error(error.message);
-    await supabase.from("chat_messages").insert({
-      order_id: orderId, sender_type: "admin",
-      message: `❌ สลิปไม่ผ่านการตรวจสอบ: ${rejectReason}\nกรุณาส่งสลิปใหม่อีกครั้งค่ะ 🙏`,
-    });
+    await notifyCustomer(orderId, `❌ ออเดอร์ #${orderId.slice(0, 8)}\nสลิปไม่ผ่านการตรวจสอบ: ${rejectReason}\nกรุณาส่งสลิปใหม่อีกครั้งค่ะ 🙏`);
     setRejectingId(null); setRejectReason("");
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("ปฏิเสธสลิปแล้ว");
   };
+
 
 
   const { data: orderItems } = useQuery({
