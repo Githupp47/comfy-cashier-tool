@@ -400,16 +400,31 @@ serve(async (req) => {
                 resolvedToppings.push({ id: tp.id, name: tp.name, price: Number(tp.price), quantity: tq });
                 topTotal += Number(tp.price) * tq;
               }
-              const total = subtotal + topTotal;
+              const itemsTotal = subtotal + topTotal;
+
+              // ค่าส่งตามโซนที่ตั้งไว้ในเว็บ
+              const { data: zRow } = await supabase
+                .from("shop_settings").select("value").eq("key", "shipping_zones").maybeSingle();
+              let zones: any[] = [];
+              try { zones = JSON.parse(zRow?.value || "[]"); } catch { zones = []; }
+              const wanted = String(args.shipping_zone || "").trim();
+              const norm = (v: string) => v.replace(/\s/g, "").toLowerCase();
+              const matched = zones.find((z: any) => norm(z.name) === norm(wanted))
+                ?? zones.find((z: any) => wanted && (norm(z.name).includes(norm(wanted)) || norm(wanted).includes(norm(z.name))));
+              const shippingFee = matched ? Number(matched.fee) || 0 : 0;
+              const total = itemsTotal + shippingFee;
+
               const { data: order, error: oErr } = await supabase
                 .from("orders")
                 .insert({
                   customer_name: args.customer_name,
                   customer_phone: args.customer_phone,
                   dormitory_map_link: args.address || null,
-                  note: (args.note ? args.note + " | " : "") + `สั่งผ่านแชทบอท (${platform})`,
+                  note: (args.note ? args.note + " | " : "") + `สั่งผ่านแชทบอท (${platform})`
+                    + (matched ? "" : ` | โซนไม่ตรงระบบ: ${wanted || "-"}`),
                   total_amount: total,
-                  shipping_fee: 0,
+                  shipping_fee: shippingFee,
+                  shipping_zone: matched ? matched.name : (wanted || null),
                   status: "pending",
                 })
                 .select().single();
@@ -432,7 +447,9 @@ serve(async (req) => {
               await supabase.from("chat_messages").insert({
                 session_id,
                 sender_type: "bot",
-                message: `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${total} บาท ยังไม่รวมค่าส่ง)`,
+                message: matched
+                  ? `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ\nค่าสินค้า ${itemsTotal} + ค่าส่ง (${matched.name}) ${shippingFee} = รวม ${total} บาท`
+                  : `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${itemsTotal} บาท) — แอดมินจะเช็คค่าส่งแล้วแจ้งอีกทีนะคะ`,
                 platform,
                 line_user_id: lineUserId,
                 customer_phone: args.customer_phone,
@@ -444,11 +461,15 @@ serve(async (req) => {
                 ok: true,
                 order_id: order.id,
                 short_id: order.id.slice(0, 8),
-                items_total_baht: total,
-                shipping_fee: "ยังไม่คิด — แอดมินจะแจ้งค่าส่งภายหลัง ห้ามบอทเดาเอง",
+                items_total_baht: itemsTotal,
+                shipping_zone: matched ? matched.name : null,
+                shipping_fee: matched ? shippingFee : "โซนไม่ตรงระบบ — แจ้งลูกค้าว่าแอดมินจะเช็คค่าส่งให้ ห้ามเดาเอง",
+                grand_total_baht: matched ? total : null,
+                pay_now: !!matched,
                 items: resolvedItems.length,
                 missing,
               };
+
 
             }
           } catch (e: any) {
