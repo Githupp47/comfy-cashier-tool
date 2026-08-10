@@ -99,6 +99,16 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
     }
   };
 
+  // ส่งข้อความหาลูกค้าทุกช่องทาง (เว็บ / LINE / FB / IG) ผ่านฟังก์ชันกลาง
+  const notifyCustomer = async (orderId: string, message: string) => {
+    const { error } = await supabase.functions.invoke("notify-customer", {
+      body: { order_id: orderId, message },
+    });
+    if (error) {
+      await supabase.from("chat_messages").insert({ order_id: orderId, sender_type: "admin", message });
+    }
+  };
+
   const approveSlip = async (orderId: string) => {
     const { error } = await supabase.from("orders").update({
       slip_status: "approved",
@@ -106,10 +116,7 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
       status: "confirmed",
     } as any).eq("id", orderId);
     if (error) return toast.error(error.message);
-    await supabase.from("chat_messages").insert({
-      order_id: orderId, sender_type: "admin",
-      message: "✅ ยืนยันการชำระเงินเรียบร้อยค่ะ กำลังเตรียมออเดอร์ให้นะคะ 🙏",
-    });
+    await notifyCustomer(orderId, `✅ ออเดอร์ #${orderId.slice(0, 8)}\nยืนยันการชำระเงินเรียบร้อยค่ะ กำลังเตรียมออเดอร์ให้นะคะ 🙏`);
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("อนุมัติสลิปแล้ว");
   };
@@ -122,14 +129,12 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
       slip_verified_at: new Date().toISOString(),
     } as any).eq("id", orderId);
     if (error) return toast.error(error.message);
-    await supabase.from("chat_messages").insert({
-      order_id: orderId, sender_type: "admin",
-      message: `❌ สลิปไม่ผ่านการตรวจสอบ: ${rejectReason}\nกรุณาส่งสลิปใหม่อีกครั้งค่ะ 🙏`,
-    });
+    await notifyCustomer(orderId, `❌ ออเดอร์ #${orderId.slice(0, 8)}\nสลิปไม่ผ่านการตรวจสอบ: ${rejectReason}\nกรุณาส่งสลิปใหม่อีกครั้งค่ะ 🙏`);
     setRejectingId(null); setRejectReason("");
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("ปฏิเสธสลิปแล้ว");
   };
+
 
 
   const { data: orderItems } = useQuery({
@@ -153,19 +158,17 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
       if (error) throw error;
 
       const o: any = orders.find((x) => x.id === id);
-      const track = o?.tracking_number ? `\nเลขพัสดุ: ${o.tracking_number}${o.tracking_url ? `\nติดตาม: ${o.tracking_url}` : ""}` : "";
+      const no = `#${id.slice(0, 8)}`;
+      const track = o?.tracking_number ? `\nเลขติดตาม: ${o.tracking_number}${o.tracking_url ? `\nเช็คสถานะ: ${o.tracking_url}` : ""}` : "";
       const msgs: Record<string, string> = {
-        confirmed: "✅ ยืนยันออเดอร์เรียบร้อยค่ะ กำลังจัดคิวให้นะคะ",
-        preparing: "👨‍🍳 กำลังเตรียมสินค้าของคุณอยู่ค่ะ",
-        delivering: `🚚 ออเดอร์ของคุณออกจากร้านแล้วค่ะ กำลังจัดส่ง${track}`,
-        completed: "📬 จัดส่งถึงเรียบร้อยแล้วค่ะ ขอบคุณที่อุดหนุนนะคะ 🙏",
-        cancelled: "❌ ออเดอร์นี้ถูกยกเลิกค่ะ หากมีข้อสงสัยทักแชทได้เลยนะคะ",
+        confirmed: `✅ ออเดอร์ ${no} — ยืนยันออเดอร์เรียบร้อยค่ะ (ขั้นที่ 1/4) กำลังจัดคิวให้นะคะ`,
+        preparing: `👨‍🍳 ออเดอร์ ${no} — กำลังเตรียมสินค้า (ขั้นที่ 2/4) ค่ะ`,
+        delivering: `🚚 ออเดอร์ ${no} — ออกจากร้านแล้ว กำลังจัดส่ง (ขั้นที่ 3/4)${track}`,
+        completed: `📬 ออเดอร์ ${no} — จัดส่งถึงเรียบร้อย (ขั้นที่ 4/4) ขอบคุณที่อุดหนุนนะคะ 🙏`,
+        cancelled: `❌ ออเดอร์ ${no} ถูกยกเลิกค่ะ หากมีข้อสงสัยทักแชทได้เลยนะคะ`,
       };
-      if (msgs[status]) {
-        await supabase.from("chat_messages").insert({
-          order_id: id, sender_type: "admin", message: msgs[status],
-        });
-      }
+      if (msgs[status]) await notifyCustomer(id, msgs[status]);
+
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });

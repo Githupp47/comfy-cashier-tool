@@ -19,13 +19,22 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 - ถ้าสั่งเกินที่มี → บอกแบบนุ่ม ๆ ว่า "วันนี้ทำได้ไม่ถึงจำนวนนี้ค่ะ" แล้วเสนอจำนวนที่ทำได้ (ไม่ต้องบอกตัวเลขคงเหลือจริง)
 - ท็อปปิ้งเช็ค get_toppings ก่อนเสมอ
 
-💸 การเงิน (สำคัญ):
-- ❌ ห้ามส่งเลขบัญชี/QR ทันทีที่ทัก ต้องยืนยันเมนู จำนวน ท็อปปิ้ง ชื่อ เบอร์ ที่อยู่ และสร้างออเดอร์ก่อน แล้วค่อยแจ้งช่องทางโอนเมื่อลูกค้าพร้อมจ่าย
-- 🚚 ค่าส่ง: คิดแยกจากค่าสินค้า บอทห้ามคิด/ห้ามเดาค่าส่งเอง ให้บอกว่า "ค่าส่งแอดมินจะเช็คตามพื้นที่แล้วแจ้งอีกทีนะคะ" — ยอดที่แจ้งคือค่าสินค้าอย่างเดียว
+🚚 ค่าส่ง (สำคัญมาก):
+- ต้องถามที่อยู่จัดส่ง + "โซน" ทุกครั้งก่อนสรุปยอด เรียก get_shipping_zones เพื่อดูโซนและค่าส่งจริงจากระบบร้าน
+- ถามแบบสั้น เช่น "อยู่โซนไหนคะ? หลังมอ / กังสดาล / ในเมือง 😊"
+- ถ้าลูกค้าบอกที่อยู่แต่ไม่บอกโซน → ต้องถามโซนซ้ำก่อน ห้ามเดา ห้ามข้าม
+- ค่าส่งใช้ตัวเลขจากระบบเท่านั้น ห้ามคิดเอง แล้วบวกเข้ากับค่าสินค้าก่อนแจ้งยอดโอน
+- ถ้าโซนไม่ตรงกับที่มีในระบบ → บอกว่า "แอดมินจะเช็คค่าส่งให้แล้วแจ้งอีกทีนะคะ" และยังไม่ต้องให้โอน
+
+💸 การเงิน:
+- ❌ ห้ามส่งเลขบัญชี/QR ทันทีที่ทัก ต้องยืนยันเมนู จำนวน ท็อปปิ้ง ชื่อ เบอร์ ที่อยู่ + โซน และสร้างออเดอร์ก่อน
+- แจ้งยอดแบบนี้: ค่าสินค้า X + ค่าส่ง Y = รวม Z บาท แล้วค่อยให้ช่องทางโอน
 - ลูกค้าส่งสลิป → ขอบคุณ บอกว่ากำลังตรวจสอบให้ รอสักครู่นะคะ (ระบบตรวจอัตโนมัติ)
 
-🛠️ เครื่องมือ: get_products, send_product_image, get_toppings, check_stock, get_sales_summary(แอดมิน), create_order(ใช้เมื่อได้ ชื่อ+เบอร์+รายการครบ)
-- สั่งสำเร็จ → แจ้งเลขออเดอร์ + ยอดค่าสินค้า + ย้ำว่าค่าส่งแจ้งภายหลัง`;
+📦 สถานะออเดอร์: ถ้าลูกค้าถามว่าของถึงไหน ให้เรียก get_order_status (ใช้เบอร์โทรหรือเลขออเดอร์) แล้วแจ้งเลขออเดอร์ + สถานะปัจจุบัน + เลขติดตาม (ถ้ามี)
+
+🛠️ เครื่องมือ: get_products, send_product_image, get_toppings, check_stock, get_shipping_zones, get_order_status, get_sales_summary(แอดมิน), create_order(ใช้เมื่อได้ ชื่อ+เบอร์+รายการ+โซนครบ)
+- สั่งสำเร็จ → แจ้งเลขออเดอร์ + ค่าสินค้า + ค่าส่ง + ยอดรวมที่ต้องโอน`;
 
 
 async function pushLineMessage(token: string, to: string, text: string) {
@@ -98,15 +107,39 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "get_shipping_zones",
+      description: "ดึงโซนจัดส่งและค่าส่งจริงที่แอดมินตั้งไว้ในเว็บ ต้องเรียกก่อนแจ้งค่าส่งทุกครั้ง",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_order_status",
+      description: "เช็คสถานะออเดอร์ล่าสุดของลูกค้า ด้วยเบอร์โทรหรือเลขออเดอร์",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_phone: { type: "string" },
+          order_id: { type: "string", description: "เลขออเดอร์ (เต็มหรือ 8 ตัวแรก)" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_order",
-      description: "สร้างออเดอร์ให้ลูกค้า ระบบจะตัดสต็อกอัตโนมัติและแจ้งเตือนแอดมิน ต้องมีชื่อ เบอร์โทร และรายการสินค้า",
+      description: "สร้างออเดอร์ให้ลูกค้า ระบบจะตัดสต็อกอัตโนมัติและคิดค่าส่งตามโซน ต้องมีชื่อ เบอร์โทร รายการสินค้า และโซนจัดส่ง",
       parameters: {
         type: "object",
         properties: {
           customer_name: { type: "string" },
           customer_phone: { type: "string" },
           address: { type: "string", description: "ที่อยู่จัดส่งหรือลิงก์แผนที่ (ถ้ามี)" },
+          shipping_zone: { type: "string", description: "ชื่อโซนจัดส่งจาก get_shipping_zones เช่น หลังมอ / กังสดาล / ในเมือง" },
           note: { type: "string" },
+
           items: {
             type: "array",
             description: "รายการสินค้า [{ product_name, quantity }]",
@@ -132,7 +165,7 @@ const tools = [
             },
           },
         },
-        required: ["customer_name", "customer_phone", "items"],
+        required: ["customer_name", "customer_phone", "items", "shipping_zone"],
       },
     },
   },
@@ -293,6 +326,43 @@ serve(async (req) => {
             .select("id, name, price, stock_quantity, is_available")
             .eq("is_available", true);
           result = { toppings: tops ?? [] };
+        } else if (name === "get_shipping_zones") {
+          const { data: s } = await supabase
+            .from("shop_settings").select("value").eq("key", "shipping_zones").maybeSingle();
+          let zones: any[] = [];
+          try { zones = JSON.parse(s?.value || "[]"); } catch { zones = []; }
+          result = {
+            zones,
+            note: "ใช้ค่าส่งจากรายการนี้เท่านั้น ถ้าลูกค้าไม่ได้บอกโซนให้ถามก่อน ห้ามเดา",
+          };
+        } else if (name === "get_order_status") {
+          let q: any = supabase
+            .from("orders")
+            .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
+            .order("created_at", { ascending: false }).limit(3);
+          if (args.order_id) q = q.ilike("id", `${String(args.order_id).replace(/[^0-9a-f-]/gi, "")}%`);
+          else if (args.customer_phone) q = q.eq("customer_phone", args.customer_phone);
+          const { data: ords } = await q;
+          const label: Record<string, string> = {
+            pending: "รอตรวจสอบการชำระเงิน",
+            confirmed: "ยืนยันออเดอร์แล้ว",
+            preparing: "กำลังเตรียมสินค้า",
+            delivering: "กำลังจัดส่ง",
+            completed: "จัดส่งสำเร็จ",
+            cancelled: "ยกเลิกแล้ว",
+          };
+          result = {
+            orders: (ords ?? []).map((o: any) => ({
+              order_no: o.id.slice(0, 8),
+              status: label[o.status] ?? o.status,
+              slip_status: o.slip_status,
+              zone: o.shipping_zone,
+              shipping_fee: Number(o.shipping_fee ?? 0),
+              total_baht: Number(o.total_amount ?? 0),
+              tracking_number: o.tracking_number,
+              tracking_url: o.tracking_url,
+            })),
+          };
         } else if (name === "create_order") {
           try {
             // Resolve products by name
@@ -330,16 +400,31 @@ serve(async (req) => {
                 resolvedToppings.push({ id: tp.id, name: tp.name, price: Number(tp.price), quantity: tq });
                 topTotal += Number(tp.price) * tq;
               }
-              const total = subtotal + topTotal;
+              const itemsTotal = subtotal + topTotal;
+
+              // ค่าส่งตามโซนที่ตั้งไว้ในเว็บ
+              const { data: zRow } = await supabase
+                .from("shop_settings").select("value").eq("key", "shipping_zones").maybeSingle();
+              let zones: any[] = [];
+              try { zones = JSON.parse(zRow?.value || "[]"); } catch { zones = []; }
+              const wanted = String(args.shipping_zone || "").trim();
+              const norm = (v: string) => v.replace(/\s/g, "").toLowerCase();
+              const matched = zones.find((z: any) => norm(z.name) === norm(wanted))
+                ?? zones.find((z: any) => wanted && (norm(z.name).includes(norm(wanted)) || norm(wanted).includes(norm(z.name))));
+              const shippingFee = matched ? Number(matched.fee) || 0 : 0;
+              const total = itemsTotal + shippingFee;
+
               const { data: order, error: oErr } = await supabase
                 .from("orders")
                 .insert({
                   customer_name: args.customer_name,
                   customer_phone: args.customer_phone,
                   dormitory_map_link: args.address || null,
-                  note: (args.note ? args.note + " | " : "") + `สั่งผ่านแชทบอท (${platform})`,
+                  note: (args.note ? args.note + " | " : "") + `สั่งผ่านแชทบอท (${platform})`
+                    + (matched ? "" : ` | โซนไม่ตรงระบบ: ${wanted || "-"}`),
                   total_amount: total,
-                  shipping_fee: 0,
+                  shipping_fee: shippingFee,
+                  shipping_zone: matched ? matched.name : (wanted || null),
                   status: "pending",
                 })
                 .select().single();
@@ -362,7 +447,9 @@ serve(async (req) => {
               await supabase.from("chat_messages").insert({
                 session_id,
                 sender_type: "bot",
-                message: `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${total} บาท ยังไม่รวมค่าส่ง)`,
+                message: matched
+                  ? `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ\nค่าสินค้า ${itemsTotal} + ค่าส่ง (${matched.name}) ${shippingFee} = รวม ${total} บาท`
+                  : `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${itemsTotal} บาท) — แอดมินจะเช็คค่าส่งแล้วแจ้งอีกทีนะคะ`,
                 platform,
                 line_user_id: lineUserId,
                 customer_phone: args.customer_phone,
@@ -374,11 +461,15 @@ serve(async (req) => {
                 ok: true,
                 order_id: order.id,
                 short_id: order.id.slice(0, 8),
-                items_total_baht: total,
-                shipping_fee: "ยังไม่คิด — แอดมินจะแจ้งค่าส่งภายหลัง ห้ามบอทเดาเอง",
+                items_total_baht: itemsTotal,
+                shipping_zone: matched ? matched.name : null,
+                shipping_fee: matched ? shippingFee : "โซนไม่ตรงระบบ — แจ้งลูกค้าว่าแอดมินจะเช็คค่าส่งให้ ห้ามเดาเอง",
+                grand_total_baht: matched ? total : null,
+                pay_now: !!matched,
                 items: resolvedItems.length,
                 missing,
               };
+
 
             }
           } catch (e: any) {
