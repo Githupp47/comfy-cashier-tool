@@ -82,14 +82,11 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
     if (error) return toast.error(error.message);
 
     if (trk) {
-      const s = await findSession();
-      await supabase.from("chat_messages").insert({
-        order_id: order.id,
-        sender_type: "admin",
-        message: `📦 เลขติดตามพัสดุของคุณ: ${trk} (${preset?.label ?? courier})${url ? `\nตรวจสอบสถานะที่: ${url}` : ""}`,
-        ...(s ? { session_id: s.session_id, platform: s.platform, line_user_id: s.line_user_id } : {}),
-      } as any);
+      await notifyCustomer(
+        `📦 ออเดอร์ #${String(order.id).slice(0, 8)}\nเลขติดตาม: ${trk} (${preset?.label ?? courier})${url ? `\nเช็คสถานะที่: ${url}` : ""}`
+      );
     }
+
 
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("บันทึกข้อมูลจัดส่งแล้ว");
