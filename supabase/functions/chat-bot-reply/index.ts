@@ -107,15 +107,39 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "get_shipping_zones",
+      description: "ดึงโซนจัดส่งและค่าส่งจริงที่แอดมินตั้งไว้ในเว็บ ต้องเรียกก่อนแจ้งค่าส่งทุกครั้ง",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_order_status",
+      description: "เช็คสถานะออเดอร์ล่าสุดของลูกค้า ด้วยเบอร์โทรหรือเลขออเดอร์",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_phone: { type: "string" },
+          order_id: { type: "string", description: "เลขออเดอร์ (เต็มหรือ 8 ตัวแรก)" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_order",
-      description: "สร้างออเดอร์ให้ลูกค้า ระบบจะตัดสต็อกอัตโนมัติและแจ้งเตือนแอดมิน ต้องมีชื่อ เบอร์โทร และรายการสินค้า",
+      description: "สร้างออเดอร์ให้ลูกค้า ระบบจะตัดสต็อกอัตโนมัติและคิดค่าส่งตามโซน ต้องมีชื่อ เบอร์โทร รายการสินค้า และโซนจัดส่ง",
       parameters: {
         type: "object",
         properties: {
           customer_name: { type: "string" },
           customer_phone: { type: "string" },
           address: { type: "string", description: "ที่อยู่จัดส่งหรือลิงก์แผนที่ (ถ้ามี)" },
+          shipping_zone: { type: "string", description: "ชื่อโซนจัดส่งจาก get_shipping_zones เช่น หลังมอ / กังสดาล / ในเมือง" },
           note: { type: "string" },
+
           items: {
             type: "array",
             description: "รายการสินค้า [{ product_name, quantity }]",
