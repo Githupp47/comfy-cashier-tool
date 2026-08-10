@@ -158,19 +158,17 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
       if (error) throw error;
 
       const o: any = orders.find((x) => x.id === id);
-      const track = o?.tracking_number ? `\nเลขพัสดุ: ${o.tracking_number}${o.tracking_url ? `\nติดตาม: ${o.tracking_url}` : ""}` : "";
+      const no = `#${id.slice(0, 8)}`;
+      const track = o?.tracking_number ? `\nเลขติดตาม: ${o.tracking_number}${o.tracking_url ? `\nเช็คสถานะ: ${o.tracking_url}` : ""}` : "";
       const msgs: Record<string, string> = {
-        confirmed: "✅ ยืนยันออเดอร์เรียบร้อยค่ะ กำลังจัดคิวให้นะคะ",
-        preparing: "👨‍🍳 กำลังเตรียมสินค้าของคุณอยู่ค่ะ",
-        delivering: `🚚 ออเดอร์ของคุณออกจากร้านแล้วค่ะ กำลังจัดส่ง${track}`,
-        completed: "📬 จัดส่งถึงเรียบร้อยแล้วค่ะ ขอบคุณที่อุดหนุนนะคะ 🙏",
-        cancelled: "❌ ออเดอร์นี้ถูกยกเลิกค่ะ หากมีข้อสงสัยทักแชทได้เลยนะคะ",
+        confirmed: `✅ ออเดอร์ ${no} — ยืนยันออเดอร์เรียบร้อยค่ะ (ขั้นที่ 1/4) กำลังจัดคิวให้นะคะ`,
+        preparing: `👨‍🍳 ออเดอร์ ${no} — กำลังเตรียมสินค้า (ขั้นที่ 2/4) ค่ะ`,
+        delivering: `🚚 ออเดอร์ ${no} — ออกจากร้านแล้ว กำลังจัดส่ง (ขั้นที่ 3/4)${track}`,
+        completed: `📬 ออเดอร์ ${no} — จัดส่งถึงเรียบร้อย (ขั้นที่ 4/4) ขอบคุณที่อุดหนุนนะคะ 🙏`,
+        cancelled: `❌ ออเดอร์ ${no} ถูกยกเลิกค่ะ หากมีข้อสงสัยทักแชทได้เลยนะคะ`,
       };
-      if (msgs[status]) {
-        await supabase.from("chat_messages").insert({
-          order_id: id, sender_type: "admin", message: msgs[status],
-        });
-      }
+      if (msgs[status]) await notifyCustomer(id, msgs[status]);
+
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
