@@ -165,7 +165,7 @@ const tools = [
             },
           },
         },
-        required: ["customer_name", "customer_phone", "items"],
+        required: ["customer_name", "customer_phone", "items", "shipping_zone"],
       },
     },
   },
