@@ -326,6 +326,43 @@ serve(async (req) => {
             .select("id, name, price, stock_quantity, is_available")
             .eq("is_available", true);
           result = { toppings: tops ?? [] };
+        } else if (name === "get_shipping_zones") {
+          const { data: s } = await supabase
+            .from("shop_settings").select("value").eq("key", "shipping_zones").maybeSingle();
+          let zones: any[] = [];
+          try { zones = JSON.parse(s?.value || "[]"); } catch { zones = []; }
+          result = {
+            zones,
+            note: "ใช้ค่าส่งจากรายการนี้เท่านั้น ถ้าลูกค้าไม่ได้บอกโซนให้ถามก่อน ห้ามเดา",
+          };
+        } else if (name === "get_order_status") {
+          let q: any = supabase
+            .from("orders")
+            .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
+            .order("created_at", { ascending: false }).limit(3);
+          if (args.order_id) q = q.ilike("id", `${String(args.order_id).replace(/[^0-9a-f-]/gi, "")}%`);
+          else if (args.customer_phone) q = q.eq("customer_phone", args.customer_phone);
+          const { data: ords } = await q;
+          const label: Record<string, string> = {
+            pending: "รอตรวจสอบการชำระเงิน",
+            confirmed: "ยืนยันออเดอร์แล้ว",
+            preparing: "กำลังเตรียมสินค้า",
+            delivering: "กำลังจัดส่ง",
+            completed: "จัดส่งสำเร็จ",
+            cancelled: "ยกเลิกแล้ว",
+          };
+          result = {
+            orders: (ords ?? []).map((o: any) => ({
+              order_no: o.id.slice(0, 8),
+              status: label[o.status] ?? o.status,
+              slip_status: o.slip_status,
+              zone: o.shipping_zone,
+              shipping_fee: Number(o.shipping_fee ?? 0),
+              total_baht: Number(o.total_amount ?? 0),
+              tracking_number: o.tracking_number,
+              tracking_url: o.tracking_url,
+            })),
+          };
         } else if (name === "create_order") {
           try {
             // Resolve products by name
