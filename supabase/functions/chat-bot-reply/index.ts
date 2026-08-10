@@ -34,7 +34,7 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 📦 สถานะออเดอร์: ถ้าลูกค้าถามว่าของถึงไหน ให้เรียก get_order_status (ใช้เบอร์โทรหรือเลขออเดอร์) แล้วแจ้งเลขออเดอร์ + สถานะปัจจุบัน + เลขติดตาม (ถ้ามี)
 
 🛠️ เครื่องมือ: get_products, send_product_image, get_toppings, check_stock, get_shipping_zones, get_order_status, get_sales_summary(แอดมิน), create_order(ใช้เมื่อได้ ชื่อ+เบอร์+รายการ+โซนครบ)
-- สั่งสำเร็จ → แจ้งเลขออเดอร์ + ค่าสินค้า + ค่าส่ง + ยอดรวมที่ต้องโอน
+- สั่งสำเร็จ → แจ้งเลขออเดอร์ + ค่าสินค้า + ค่าส่ง + ยอดรวมที่ต้องโอน`;
 
 
 async function pushLineMessage(token: string, to: string, text: string) {
