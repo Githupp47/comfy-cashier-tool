@@ -23,16 +23,14 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
   const [saving, setSaving] = useState(false);
   const [savingFee, setSavingFee] = useState(false);
 
-  // หา session แชทของออเดอร์นี้ (เว็บหรือไลน์) เพื่อส่งข้อความให้ถูกช่อง
-  const findSession = async () => {
-    const { data } = await supabase
-      .from("chat_messages")
-      .select("session_id, platform, line_user_id")
-      .eq("order_id", order.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data ?? null;
+  // ส่งข้อความหาลูกค้าทุกช่องทาง (เว็บ / LINE / FB / IG)
+  const notifyCustomer = async (message: string) => {
+    const { error } = await supabase.functions.invoke("notify-customer", {
+      body: { order_id: order.id, message },
+    });
+    if (error) {
+      await supabase.from("chat_messages").insert({ order_id: order.id, sender_type: "admin", message } as any);
+    }
   };
 
   const saveFee = async () => {
@@ -46,16 +44,13 @@ export function ShippingPanel({ order, queryClient }: { order: any; queryClient:
     setSavingFee(false);
     if (error) return toast.error(error.message);
 
-    const s = await findSession();
-    await supabase.from("chat_messages").insert({
-      order_id: order.id,
-      sender_type: "admin",
-      message: `🚚 ค่าจัดส่งออเดอร์ #${String(order.id).slice(0, 8)} = ฿${f.toLocaleString()}\nยอดรวมที่ต้องโอน: ฿${(itemsTotal + f).toLocaleString()}`,
-      ...(s ? { session_id: s.session_id, platform: s.platform, line_user_id: s.line_user_id } : {}),
-    } as any);
+    await notifyCustomer(
+      `🚚 ออเดอร์ #${String(order.id).slice(0, 8)}\nค่าสินค้า ฿${itemsTotal.toLocaleString()} + ค่าส่ง ฿${f.toLocaleString()}\nยอดรวมที่ต้องโอน: ฿${(itemsTotal + f).toLocaleString()}`
+    );
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     toast.success("บันทึกค่าส่ง & แจ้งลูกค้าแล้ว");
   };
+
 
   // สร้างเลขติดตามของร้านเอง เช่น HK-260809-A1B2
   const genTracking = () => {
