@@ -30,9 +30,19 @@ serve(async (req) => {
     const { order_id, session_id, message } = await req.json();
     if (!message) throw new Error("message required");
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    if (!token) throw new Error("unauthorized");
+    if (token !== serviceRoleKey) {
+      const authClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
+      const { data: authData, error: authError } = await authClient.auth.getUser(token);
+      if (authError || !authData.user) throw new Error("unauthorized");
+    }
+
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      supabaseUrl,
+      serviceRoleKey,
     );
 
     // หา session แชทที่ผูกกับออเดอร์ (เว็บ / LINE / Meta)
@@ -69,15 +79,6 @@ serve(async (req) => {
       }
     }
 
-    await supabase.from("chat_messages").insert({
-      order_id: order_id ?? null,
-      sender_type: "admin",
-      message,
-      session_id: sess?.session_id ?? null,
-      platform: sess?.platform ?? "web",
-      line_user_id: sess?.line_user_id ?? null,
-    });
-
     const inferredPlatform = ["line", "facebook", "instagram"].find((value) => sess?.session_id?.startsWith(`${value}:`));
     const platform = inferredPlatform ?? sess?.platform ?? "web";
     const recipientId = sess?.line_user_id ?? (inferredPlatform ? sess.session_id.slice(inferredPlatform.length + 1) : null);
@@ -93,6 +94,16 @@ serve(async (req) => {
         throw new Error(`ยังไม่ได้เปิดใช้งานหรือตั้งค่าการเชื่อมต่อ ${platform}`);
       }
     }
+
+    const { error: insertError } = await supabase.from("chat_messages").insert({
+      order_id: order_id ?? null,
+      sender_type: "admin",
+      message,
+      session_id: sess?.session_id ?? session_id ?? null,
+      platform,
+      line_user_id: recipientId,
+    });
+    if (insertError) throw insertError;
 
     if (sess?.session_id) {
       supabase.functions.invoke("send-push", {
