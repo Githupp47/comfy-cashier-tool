@@ -18,6 +18,7 @@ export function AdminChat() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
+  const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -110,20 +111,19 @@ export function AdminChat() {
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMsg.trim() || !selectedSession) return;
+    if (!newMsg.trim() || !selectedSession || sending) return;
     const text = newMsg.trim();
-    await supabase.from("chat_messages").insert({
-      session_id: selectedSession, sender_type: "admin", message: text,
+    setSending(true);
+    const { data, error } = await supabase.functions.invoke("notify-customer", {
+      body: { session_id: selectedSession, message: text },
     });
+    setSending(false);
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || "ส่งข้อความไม่สำเร็จ");
+      return;
+    }
     setNewMsg("");
-    supabase.functions.invoke("send-push", {
-      body: {
-        session_id: selectedSession,
-        title: "💬 ข้อความจากร้าน HAKKŌ",
-        body: text.slice(0, 100),
-        url: "/",
-      },
-    }).catch(() => {});
+    toast.success(data?.delivered_to === "web" ? "ส่งเข้าแชทลูกค้าแล้ว" : `ส่งถึง ${String(data?.delivered_to).toUpperCase()} แล้ว`);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,15 +135,17 @@ export function AdminChat() {
       const att = await uploadChatFile(file, selectedSession);
       if (!att) return;
       const msg = att.type === "image" ? "📎 [รูป] " + att.name : "📎 [ไฟล์] " + att.name;
-      await supabase.from("chat_messages").insert({
-        session_id: selectedSession,
-        sender_type: "admin",
-        message: msg,
-        attachment_url: att.url,
-        attachment_type: att.type,
-        attachment_name: att.name,
+      const { data, error } = await supabase.functions.invoke("notify-customer", {
+        body: {
+          session_id: selectedSession,
+          message: msg,
+          attachment_url: att.url,
+          attachment_type: att.type,
+          attachment_name: att.name,
+        },
       });
-      toast.success("ส่งไฟล์แล้ว");
+      if (error || data?.error) throw new Error(data?.error || error?.message || "ส่งไฟล์ไม่สำเร็จ");
+      toast.success(data?.delivered_to === "web" ? "ส่งไฟล์เข้าแชทแล้ว" : `ส่งไฟล์ถึง ${String(data?.delivered_to).toUpperCase()} แล้ว`);
     } catch (err: any) {
       toast.error(err.message || "อัพโหลดไม่สำเร็จ");
     } finally {
@@ -270,7 +272,9 @@ export function AdminChat() {
                 </Button>
                 <Input className="rounded-xl flex-1 text-sm" placeholder="พิมพ์ตอบกลับ..." value={newMsg}
                   onChange={(e) => setNewMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} />
-                <Button size="icon" className="rounded-xl shrink-0" onClick={sendMessage}><Send className="h-4 w-4" /></Button>
+                <Button size="icon" className="rounded-xl shrink-0" onClick={sendMessage} disabled={sending || !newMsg.trim()}>
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
               </div>
             </>
           )}

@@ -10,7 +10,20 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 
 🚫 ขอบเขต: ตอบเฉพาะเรื่องร้าน (สินค้า ราคา ท็อปปิ้ง สั่งซื้อ ชำระเงิน จัดส่ง) เรื่องอื่นตอบว่า "ขอโทษค่ะ ตอบได้เฉพาะเรื่องสินค้าของร้าน HAKKŌ นะคะ 🙏"
 
-✍️ สไตล์: สั้น 1-3 บรรทัด เป็นธรรมชาติ ไม่ยัดข้อมูลทีเดียวเยอะ ถามทีละอย่าง ใช้ bullet (•) เฉพาะตอนลิสต์เมนู
+✍️ สไตล์: สั้น อ่านง่าย เป็นธรรมชาติ ไม่ยัดข้อมูลทีเดียวเยอะ ใช้หัวข้อ/บรรทัดใหม่เมื่อสรุปออเดอร์
+
+🧭 ขั้นตอนรับออเดอร์ (ทำตามลำดับและถามเฉพาะข้อมูลที่ยังไม่มี):
+1. เมนู + จำนวน
+2. ท็อปปิ้ง (ถ้ามี)
+3. ชื่อลูกค้า
+4. เบอร์โทร
+5. ชื่อหอพัก/ที่อยู่ หรือลิงก์ Google Maps
+6. โซนจัดส่ง
+7. ทวนรายการและสร้างออเดอร์
+- ถ้าลูกค้าตอบหลายข้อพร้อมกัน ให้จำทั้งหมดแล้วถามเฉพาะข้อถัดไปที่ขาด ห้ามถามข้อมูลเดิมซ้ำ
+- ข้อความก่อนหน้าและ "ข้อมูลที่ระบบพบแล้ว" คือข้อมูลจริงของบทสนทนานี้ ต้องอ่านก่อนตอบทุกครั้ง
+- ห้ามสร้างออเดอร์ถ้ายังขาดชื่อ เบอร์ ที่อยู่/ชื่อหอ/ลิงก์แมพ หรือโซน
+- หลังสร้างสำเร็จ ให้ตอบเป็นขั้นตอน: เลขออเดอร์ / ค่าสินค้า / ค่าส่ง / ยอดรวม / ขั้นตอนชำระเงิน
 
 📦 สต็อก (ห้ามพลาด):
 - ก่อนแนะนำหรือรับออเดอร์ ต้องเรียก get_products / check_stock ทุกครั้ง
@@ -31,7 +44,7 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 - แจ้งยอดแบบนี้: ค่าสินค้า X + ค่าส่ง Y = รวม Z บาท แล้วค่อยให้ช่องทางโอน
 - ลูกค้าส่งสลิป → ขอบคุณ บอกว่ากำลังตรวจสอบให้ รอสักครู่นะคะ (ระบบตรวจอัตโนมัติ)
 
-📦 สถานะออเดอร์: ถ้าลูกค้าถามว่าของถึงไหน ให้เรียก get_order_status (ใช้เบอร์โทรหรือเลขออเดอร์) แล้วแจ้งเลขออเดอร์ + สถานะปัจจุบัน + เลขติดตาม (ถ้ามี)
+📦 สถานะออเดอร์: ถ้าลูกค้าถามว่าของถึงไหน ให้เรียก get_order_status (ใช้เบอร์โทร เลขออเดอร์ หรือ session ปัจจุบัน) แล้วแจ้งเลขออเดอร์ + สถานะปัจจุบัน + เลขติดตาม (ถ้ามี) ห้ามตอบว่าไม่พบก่อนเรียกเครื่องมือ
 
 🛠️ เครื่องมือ: get_products, send_product_image, get_toppings, check_stock, get_shipping_zones, get_order_status, get_sales_summary(แอดมิน), create_order(ใช้เมื่อได้ ชื่อ+เบอร์+รายการ+โซนครบ)
 - สั่งสำเร็จ → แจ้งเลขออเดอร์ + ค่าสินค้า + ค่าส่ง + ยอดรวมที่ต้องโอน`;
@@ -136,7 +149,7 @@ const tools = [
         properties: {
           customer_name: { type: "string" },
           customer_phone: { type: "string" },
-          address: { type: "string", description: "ที่อยู่จัดส่งหรือลิงก์แผนที่ (ถ้ามี)" },
+          address: { type: "string", description: "ชื่อหอพัก/ที่อยู่จัดส่ง หรือลิงก์ Google Maps" },
           shipping_zone: { type: "string", description: "ชื่อโซนจัดส่งจาก get_shipping_zones เช่น หลังมอ / กังสดาล / ในเมือง" },
           note: { type: "string" },
 
@@ -165,7 +178,7 @@ const tools = [
             },
           },
         },
-        required: ["customer_name", "customer_phone", "items", "shipping_zone"],
+        required: ["customer_name", "customer_phone", "address", "items", "shipping_zone"],
       },
     },
   },
@@ -196,10 +209,10 @@ serve(async (req) => {
 
     const { data: history } = await supabase
       .from("chat_messages")
-      .select("sender_type, message, platform, line_user_id, attachment_url, attachment_type")
+      .select("sender_type, message, platform, line_user_id, attachment_url, attachment_type, customer_name, customer_phone, order_id")
       .eq("session_id", session_id)
       .order("created_at", { ascending: false })
-      .limit(12);
+      .limit(40);
 
     const reversed = (history ?? []).reverse();
     const last = (history ?? []).find((m: any) => m.line_user_id);
@@ -214,7 +227,26 @@ serve(async (req) => {
     }
 
     // Build messages with multimodal user content
-    const systemPrompt = (settings.system_prompt || DEFAULT_PROMPT) + "\n\n" + DEFAULT_PROMPT;
+    const knownProfile = (history ?? []).find((m: any) => m.customer_name || m.customer_phone);
+    const linkedMessage = (history ?? []).find((m: any) => m.order_id);
+    let linkedOrder: any = null;
+    if (linkedMessage?.order_id) {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, customer_name, customer_phone, dormitory_map_link, shipping_zone, status")
+        .eq("id", linkedMessage.order_id)
+        .maybeSingle();
+      linkedOrder = data;
+    }
+    const knownContext = [
+      "ข้อมูลที่ระบบพบแล้ว (ห้ามถามซ้ำ):",
+      `• ชื่อ: ${linkedOrder?.customer_name || knownProfile?.customer_name || "ยังไม่มี"}`,
+      `• เบอร์โทร: ${linkedOrder?.customer_phone || knownProfile?.customer_phone || "ยังไม่มี"}`,
+      `• ที่อยู่/หอพัก/แมพ: ${linkedOrder?.dormitory_map_link || "ตรวจจากข้อความก่อนหน้า หากลูกค้าเคยบอกแล้วให้ใช้ข้อมูลนั้น"}`,
+      `• โซน: ${linkedOrder?.shipping_zone || "ตรวจจากข้อความก่อนหน้า หากลูกค้าเคยบอกแล้วให้ใช้ข้อมูลนั้น"}`,
+      `• ออเดอร์ที่ผูกกับแชท: ${linkedOrder ? `#${linkedOrder.id.slice(0, 8)} (${linkedOrder.status})` : "ยังไม่มี"}`,
+    ].join("\n");
+    const systemPrompt = (settings.system_prompt || DEFAULT_PROMPT) + "\n\n" + DEFAULT_PROMPT + "\n\n" + knownContext;
     const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
     for (const m of reversed) {
       const role = m.sender_type === "customer" ? "user" : "assistant";
@@ -232,7 +264,11 @@ serve(async (req) => {
     }
 
     // Add current incoming if not already last
-    if (message || attachment_url) {
+    const lastHistoryMessage = reversed[reversed.length - 1];
+    const incomingAlreadySaved = lastHistoryMessage?.sender_type === "customer"
+      && lastHistoryMessage?.message === message
+      && (lastHistoryMessage?.attachment_url || null) === (attachment_url || null);
+    if ((message || attachment_url) && !incomingAlreadySaved) {
       const isImg = attachment_type === "image" && attachment_url;
       aiMessages.push({
         role: "user",
@@ -257,7 +293,7 @@ serve(async (req) => {
           Authorization: `Bearer ${lovableKey}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "google/gemini-3.6-flash",
           messages: aiMessages,
           tools,
           tool_choice: "auto",
@@ -336,13 +372,36 @@ serve(async (req) => {
             note: "ใช้ค่าส่งจากรายการนี้เท่านั้น ถ้าลูกค้าไม่ได้บอกโซนให้ถามก่อน ห้ามเดา",
           };
         } else if (name === "get_order_status") {
-          let q: any = supabase
-            .from("orders")
-            .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
-            .order("created_at", { ascending: false }).limit(3);
-          if (args.order_id) q = q.ilike("id", `${String(args.order_id).replace(/[^0-9a-f-]/gi, "")}%`);
-          else if (args.customer_phone) q = q.eq("customer_phone", args.customer_phone);
-          const { data: ords } = await q;
+          let ords: any[] = [];
+          const cleanOrderId = String(args.order_id || "").replace(/[^0-9a-f-]/gi, "");
+          if (cleanOrderId.length === 36) {
+            const { data } = await supabase
+              .from("orders")
+              .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
+              .eq("id", cleanOrderId).limit(1);
+            ords = data ?? [];
+          } else if (cleanOrderId) {
+            const { data } = await supabase
+              .from("orders")
+              .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
+              .order("created_at", { ascending: false }).limit(100);
+            ords = (data ?? []).filter((o: any) => o.id.toLowerCase().startsWith(cleanOrderId.toLowerCase())).slice(0, 3);
+          } else {
+            const phone = args.customer_phone || linkedOrder?.customer_phone || knownProfile?.customer_phone;
+            if (phone) {
+              const { data } = await supabase
+                .from("orders")
+                .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
+                .eq("customer_phone", phone).order("created_at", { ascending: false }).limit(3);
+              ords = data ?? [];
+            } else if (linkedOrder?.id) {
+              const { data } = await supabase
+                .from("orders")
+                .select("id, status, total_amount, shipping_fee, shipping_zone, slip_status, tracking_number, tracking_url, created_at")
+                .eq("id", linkedOrder.id).limit(1);
+              ords = data ?? [];
+            }
+          }
           const label: Record<string, string> = {
             pending: "รอตรวจสอบการชำระเงิน",
             confirmed: "ยืนยันออเดอร์แล้ว",
@@ -352,7 +411,7 @@ serve(async (req) => {
             cancelled: "ยกเลิกแล้ว",
           };
           result = {
-            orders: (ords ?? []).map((o: any) => ({
+            orders: ords.map((o: any) => ({
               order_no: o.id.slice(0, 8),
               status: label[o.status] ?? o.status,
               slip_status: o.slip_status,
@@ -429,33 +488,29 @@ serve(async (req) => {
                 })
                 .select().single();
               if (oErr) throw oErr;
-              const rows: any[] = resolvedItems.map((i) => ({ order_id: order.id, ...i, toppings: [] }));
-              if (resolvedToppings.length > 0) {
-                rows.push({
-                  order_id: order.id,
-                  product_id: null,
-                  product_name: "ท็อปปิ้ง: " + resolvedToppings.map((t) => `${t.name} x${t.quantity}`).join(", "),
-                  price: topTotal,
-                  quantity: 1,
-                  toppings: resolvedToppings,
-                });
-              }
+              const rows: any[] = resolvedItems.map((i, index) => ({
+                order_id: order.id,
+                ...i,
+                toppings: index === 0 ? resolvedToppings : [],
+              }));
               const { error: iErr } = await supabase.from("order_items").insert(rows);
               if (iErr) throw iErr;
 
-              // ผูกเบอร์/ชื่อลูกค้าเข้ากับ session แชท (ใช้จับคู่สลิปจาก LINE ภายหลัง)
-              await supabase.from("chat_messages").insert({
-                session_id,
-                sender_type: "bot",
-                message: matched
-                  ? `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ\nค่าสินค้า ${itemsTotal} + ค่าส่ง (${matched.name}) ${shippingFee} = รวม ${total} บาท`
-                  : `🧾 รับออเดอร์ #${order.id.slice(0, 8)} แล้วค่ะ (ค่าสินค้า ${itemsTotal} บาท) — แอดมินจะเช็คค่าส่งแล้วแจ้งอีกทีนะคะ`,
-                platform,
-                line_user_id: lineUserId,
-                customer_phone: args.customer_phone,
-                customer_name: args.customer_name,
-                order_id: order.id,
-              });
+              // ผูกออเดอร์และข้อมูลลูกค้ากับข้อความล่าสุด โดยไม่ส่งข้อความซ้ำ
+              const latestCustomer = (history ?? []).find((m: any) => m.sender_type === "customer");
+              if (latestCustomer) {
+                const { data: latestRows } = await supabase.from("chat_messages")
+                  .select("id").eq("session_id", session_id).eq("sender_type", "customer")
+                  .order("created_at", { ascending: false }).limit(1);
+                const latestId = latestRows?.[0]?.id;
+                if (latestId) {
+                  await supabase.from("chat_messages").update({
+                    order_id: order.id,
+                    customer_phone: args.customer_phone,
+                    customer_name: args.customer_name,
+                  }).eq("id", latestId);
+                }
+              }
 
               result = {
                 ok: true,
@@ -494,6 +549,9 @@ serve(async (req) => {
       message: finalReply,
       platform,
       line_user_id: lineUserId,
+      customer_phone: linkedOrder?.customer_phone || knownProfile?.customer_phone || null,
+      customer_name: linkedOrder?.customer_name || knownProfile?.customer_name || null,
+      order_id: linkedOrder?.id || null,
     });
 
     // Insert product images as separate messages
