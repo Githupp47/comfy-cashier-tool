@@ -135,15 +135,17 @@ export function AdminChat() {
       const att = await uploadChatFile(file, selectedSession);
       if (!att) return;
       const msg = att.type === "image" ? "📎 [รูป] " + att.name : "📎 [ไฟล์] " + att.name;
-      await supabase.from("chat_messages").insert({
-        session_id: selectedSession,
-        sender_type: "admin",
-        message: msg,
-        attachment_url: att.url,
-        attachment_type: att.type,
-        attachment_name: att.name,
+      const { data, error } = await supabase.functions.invoke("notify-customer", {
+        body: {
+          session_id: selectedSession,
+          message: msg,
+          attachment_url: att.url,
+          attachment_type: att.type,
+          attachment_name: att.name,
+        },
       });
-      toast.success("ส่งไฟล์แล้ว");
+      if (error || data?.error) throw new Error(data?.error || error?.message || "ส่งไฟล์ไม่สำเร็จ");
+      toast.success(data?.delivered_to === "web" ? "ส่งไฟล์เข้าแชทแล้ว" : `ส่งไฟล์ถึง ${String(data?.delivered_to).toUpperCase()} แล้ว`);
     } catch (err: any) {
       toast.error(err.message || "อัพโหลดไม่สำเร็จ");
     } finally {
