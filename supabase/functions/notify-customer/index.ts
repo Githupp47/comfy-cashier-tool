@@ -7,19 +7,21 @@ const corsHeaders = {
 };
 
 async function pushLine(token: string, to: string, text: string) {
-  await fetch("https://api.line.me/v2/bot/message/push", {
+  const response = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
-  }).catch((e) => console.error("LINE push", e));
+  });
+  if (!response.ok) throw new Error(`LINE ส่งไม่สำเร็จ (${response.status}): ${await response.text()}`);
 }
 
 async function pushMeta(token: string, to: string, text: string) {
-  await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(token)}`, {
+  const response = await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(token)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message: { text } }),
-  }).catch((e) => console.error("Meta push", e));
+  });
+  if (!response.ok) throw new Error(`Meta ส่งไม่สำเร็จ (${response.status}): ${await response.text()}`);
 }
 
 serve(async (req) => {
@@ -76,15 +78,19 @@ serve(async (req) => {
       line_user_id: sess?.line_user_id ?? null,
     });
 
-    const platform = sess?.platform;
-    if (sess?.line_user_id && (platform === "line" || platform === "facebook" || platform === "instagram")) {
+    const inferredPlatform = ["line", "facebook", "instagram"].find((value) => sess?.session_id?.startsWith(`${value}:`));
+    const platform = inferredPlatform ?? sess?.platform ?? "web";
+    const recipientId = sess?.line_user_id ?? (inferredPlatform ? sess.session_id.slice(inferredPlatform.length + 1) : null);
+    if (recipientId && (platform === "line" || platform === "facebook" || platform === "instagram")) {
       const { data: integ } = await supabase
         .from("messaging_integrations")
         .select("channel_access_token, enabled")
         .eq("platform", platform).maybeSingle();
       if (integ?.enabled && integ.channel_access_token) {
-        if (platform === "line") await pushLine(integ.channel_access_token, sess.line_user_id, message);
-        else await pushMeta(integ.channel_access_token, sess.line_user_id, message);
+        if (platform === "line") await pushLine(integ.channel_access_token, recipientId, message);
+        else await pushMeta(integ.channel_access_token, recipientId, message);
+      } else {
+        throw new Error(`ยังไม่ได้เปิดใช้งานหรือตั้งค่าการเชื่อมต่อ ${platform}`);
       }
     }
 
