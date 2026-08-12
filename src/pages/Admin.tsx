@@ -337,8 +337,11 @@ export default function Admin() {
             <TabsTrigger value="integrations" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
               <Plug className="h-4 w-4" /> เชื่อมต่อ
             </TabsTrigger>
+            <TabsTrigger value="promotions" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
+              <Tag className="h-4 w-4" /> <span className="text-sm font-medium">โปรโมชั่น</span>
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5">
-              <Settings className="h-4 w-4" /> ตั้งค่า
+              <Settings className="h-4 w-4" /> <span className="text-sm font-medium">ตั้งค่า</span>
             </TabsTrigger>
           </TabsList>
 
@@ -349,6 +352,7 @@ export default function Admin() {
           <TabsContent value="toppings"><ToppingsManager /></TabsContent>
           <TabsContent value="bot"><BotSettings /></TabsContent>
           <TabsContent value="integrations"><MessagingIntegrations /></TabsContent>
+          <TabsContent value="promotions"><PromotionsManager /></TabsContent>
           <TabsContent value="settings"><ShopSettings /></TabsContent>
         </Tabs>
       </div>
