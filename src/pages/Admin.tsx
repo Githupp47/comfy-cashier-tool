@@ -25,6 +25,7 @@ import { BotSettings } from "@/components/admin/BotSettings";
 import { MessagingIntegrations } from "@/components/admin/MessagingIntegrations";
 import { ToppingsManager } from "@/components/admin/ToppingsManager";
 import { SalesDashboard } from "@/components/admin/SalesDashboard";
+import { PromotionsManager } from "@/components/admin/PromotionsManager";
 
 type Order = Tables<"orders">;
 
