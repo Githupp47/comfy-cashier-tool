@@ -10,7 +10,7 @@ import {
   LogOut, Package, ShoppingBag,
   Settings, BellRing, TrendingUp, Clock,
   MessageSquare, Volume2, VolumeX,
-  BarChart3, CalendarDays, Bot, Plug, Sparkles
+  BarChart3, CalendarDays, Bot, Plug, Sparkles, Tag
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
