@@ -277,14 +277,45 @@ export function OrdersManager({ orders, queryClient }: { orders: Order[]; queryC
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {o.dormitory_map_link && (
-                      <a href={o.dormitory_map_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground px-3 py-1.5 rounded-full transition-colors">
-                        <MapPin className="h-3 w-3 text-primary" /> ดูที่อยู่หอพัก
-                      </a>
-                    )}
-                    {o.note && <span className="inline-flex items-center gap-1.5 text-xs bg-muted text-muted-foreground px-3 py-1.5 rounded-full"><MessageSquare className="h-3 w-3" /> {o.note}</span>}
-                  </div>
+                  {(o.dormitory_map_link || o.shipping_zone || o.note) && (
+                    <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+                      {o.shipping_zone && (
+                        <p className="text-xs text-muted-foreground">🚚 โซนจัดส่ง: <span className="text-foreground font-medium">{o.shipping_zone}</span></p>
+                      )}
+                      {o.dormitory_map_link && (
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3 text-primary" /> ที่อยู่ / หอพักที่ลูกค้ากรอก</p>
+                          <p className="text-sm text-foreground break-words whitespace-pre-wrap">{o.dormitory_map_link}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {/^https?:\/\//i.test(o.dormitory_map_link.trim()) && (
+                              <a href={o.dormitory_map_link.trim()} target="_blank" rel="noopener noreferrer"
+                                className="text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors">
+                                เปิดลิงก์แผนที่
+                              </a>
+                            )}
+                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.dormitory_map_link.trim())}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="text-xs bg-muted px-3 py-1.5 rounded-full hover:bg-muted/70 transition-colors">
+                              ค้นหาใน Google Maps
+                            </a>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(o.dormitory_map_link || ""); toast.success("คัดลอกที่อยู่แล้ว"); }}
+                              className="text-xs bg-muted px-3 py-1.5 rounded-full hover:bg-muted/70 transition-colors">
+                              คัดลอกที่อยู่
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {o.note && (
+                        <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                          <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" /> <span className="text-foreground whitespace-pre-wrap break-words">{o.note}</span>
+                        </p>
+                      )}
+                      {Number((o as any).discount_amount) > 0 && (
+                        <p className="text-xs text-emerald-700">🏷️ ส่วนลด ฿{Number((o as any).discount_amount).toLocaleString()} {(o as any).promotion_code ? `(${(o as any).promotion_code})` : ""}</p>
+                      )}
+                    </div>
+                  )}
 
                   {o.slip_url && (
                     <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">

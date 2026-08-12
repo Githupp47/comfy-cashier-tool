@@ -188,10 +188,12 @@ export type Database = {
           customer_name: string
           customer_phone: string
           delivered_at: string | null
+          discount_amount: number
           dormitory_map_link: string | null
           id: string
           note: string | null
           preparing_at: string | null
+          promotion_code: string | null
           shipped_at: string | null
           shipping_fee: number
           shipping_zone: string | null
@@ -213,10 +215,12 @@ export type Database = {
           customer_name: string
           customer_phone: string
           delivered_at?: string | null
+          discount_amount?: number
           dormitory_map_link?: string | null
           id?: string
           note?: string | null
           preparing_at?: string | null
+          promotion_code?: string | null
           shipped_at?: string | null
           shipping_fee?: number
           shipping_zone?: string | null
@@ -238,10 +242,12 @@ export type Database = {
           customer_name?: string
           customer_phone?: string
           delivered_at?: string | null
+          discount_amount?: number
           dormitory_map_link?: string | null
           id?: string
           note?: string | null
           preparing_at?: string | null
+          promotion_code?: string | null
           shipped_at?: string | null
           shipping_fee?: number
           shipping_zone?: string | null
@@ -304,6 +310,66 @@ export type Database = {
           stock_quantity?: number
           updated_at?: string
           weight?: string | null
+        }
+        Relationships: []
+      }
+      promotions: {
+        Row: {
+          code: string | null
+          created_at: string
+          description: string | null
+          discount_type: string
+          discount_value: number
+          ends_at: string | null
+          free_shipping: boolean
+          id: string
+          is_active: boolean
+          max_discount: number | null
+          min_order_amount: number
+          name: string
+          sort_order: number
+          starts_at: string | null
+          updated_at: string
+          usage_limit: number | null
+          used_count: number
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          ends_at?: string | null
+          free_shipping?: boolean
+          id?: string
+          is_active?: boolean
+          max_discount?: number | null
+          min_order_amount?: number
+          name: string
+          sort_order?: number
+          starts_at?: string | null
+          updated_at?: string
+          usage_limit?: number | null
+          used_count?: number
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          ends_at?: string | null
+          free_shipping?: boolean
+          id?: string
+          is_active?: boolean
+          max_discount?: number | null
+          min_order_amount?: number
+          name?: string
+          sort_order?: number
+          starts_at?: string | null
+          updated_at?: string
+          usage_limit?: number | null
+          used_count?: number
         }
         Relationships: []
       }
