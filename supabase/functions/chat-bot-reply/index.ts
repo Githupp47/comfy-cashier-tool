@@ -561,11 +561,18 @@ serve(async (req) => {
                 }
               }
 
+              if (picked.promo) {
+                await (supabase.from as any)("promotions")
+                  .update({ used_count: Number(picked.promo.used_count || 0) + 1 })
+                  .eq("id", picked.promo.id);
+              }
+
               result = {
                 ok: true,
                 order_id: order.id,
                 short_id: order.id.slice(0, 8),
                 items_total_baht: itemsTotal,
+                promotion: picked.promo ? { name: picked.promo.name, discount_baht: picked.discount, free_shipping: picked.freeShipping } : null,
                 shipping_zone: matched ? matched.name : null,
                 shipping_fee: matched ? shippingFee : "โซนไม่ตรงระบบ — แจ้งลูกค้าว่าแอดมินจะเช็คค่าส่งให้ ห้ามเดาเอง",
                 grand_total_baht: matched ? total : null,
