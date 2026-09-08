@@ -39,9 +39,11 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 - ค่าส่งใช้ตัวเลขจากระบบเท่านั้น ห้ามคิดเอง แล้วบวกเข้ากับค่าสินค้าก่อนแจ้งยอดโอน
 - ถ้าโซนไม่ตรงกับที่มีในระบบ → บอกว่า "แอดมินจะเช็คค่าส่งให้แล้วแจ้งอีกทีนะคะ" และยังไม่ต้องให้โอน
 
+🎁 โปรโมชั่น: ก่อนแจ้งยอดโอนทุกครั้งให้เรียก get_active_promotions ถ้ามีโปรที่เข้าเงื่อนไขให้แจ้งลูกค้า (เช่น "มีโปรลด X บาทค่ะ") ถ้าโปรต้องใช้โค้ด ให้ถามว่ามีโค้ดไหม แล้วส่ง promo_code ตอน create_order ห้ามคิดส่วนลดเอง ใช้ยอดจากระบบเท่านั้น
+
 💸 การเงิน:
 - ❌ ห้ามส่งเลขบัญชี/QR ทันทีที่ทัก ต้องยืนยันเมนู จำนวน ท็อปปิ้ง ชื่อ เบอร์ ที่อยู่ + โซน และสร้างออเดอร์ก่อน
-- แจ้งยอดแบบนี้: ค่าสินค้า X + ค่าส่ง Y = รวม Z บาท แล้วค่อยให้ช่องทางโอน
+- แจ้งยอดแบบนี้: ค่าสินค้า X + ค่าส่ง Y − ส่วนลด D = รวม Z บาท แล้วค่อยให้ช่องทางโอน
 - ลูกค้าส่งสลิป → ขอบคุณ บอกว่ากำลังตรวจสอบให้ รอสักครู่นะคะ (ระบบตรวจอัตโนมัติ)
 
 📦 สถานะออเดอร์: ถ้าลูกค้าถามว่าของถึงไหน ให้เรียก get_order_status (ใช้เบอร์โทร เลขออเดอร์ หรือ session ปัจจุบัน) แล้วแจ้งเลขออเดอร์ + สถานะปัจจุบัน + เลขติดตาม (ถ้ามี) ห้ามตอบว่าไม่พบก่อนเรียกเครื่องมือ
@@ -403,6 +405,22 @@ serve(async (req) => {
             .select("id, name, price, stock_quantity, is_available")
             .eq("is_available", true);
           result = { toppings: tops ?? [] };
+        } else if (name === "get_active_promotions") {
+          const { data: promoRows } = await (supabase.from as any)("promotions")
+            .select("*").eq("is_active", true).order("sort_order");
+          result = {
+            promotions: (promoRows ?? []).map((p: any) => ({
+              name: p.name,
+              code: p.code,
+              discount_type: p.discount_type,
+              discount_value: Number(p.discount_value),
+              min_order_amount: Number(p.min_order_amount || 0),
+              max_discount: p.max_discount ? Number(p.max_discount) : null,
+              free_shipping: !!p.free_shipping,
+              description: p.description,
+            })),
+            note: "โปรที่มี code ต้องให้ลูกค้ากรอกโค้ดถึงใช้ได้ โปรที่ไม่มี code ใช้อัตโนมัติเมื่อถึงยอดขั้นต่ำ ระบบจะคิดส่วนลดจริงตอน create_order",
+          };
         } else if (name === "get_shipping_zones") {
           const { data: s } = await supabase
             .from("shop_settings").select("value").eq("key", "shipping_zones").maybeSingle();
