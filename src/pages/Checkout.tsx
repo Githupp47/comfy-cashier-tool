@@ -130,6 +130,8 @@ export default function Checkout() {
           total_amount: grandTotal,
           shipping_fee: shippingFee,
           shipping_zone: selectedZone?.name ?? null,
+          discount_amount: discount,
+          promotion_code: best.promo?.code ?? best.promo?.name ?? null,
           status: "pending",
         })
         .select()
@@ -226,6 +228,21 @@ export default function Checkout() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">ท็อปปิ้ง</span>
                       <span className="font-medium">฿{toppingTotal.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 text-sm py-1">
+                    <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-3.5 w-3.5" /> โค้ดส่วนลด</span>
+                    <Input
+                      className="w-[190px] h-9 rounded-xl"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
+                      placeholder="กรอกโค้ด (ถ้ามี)"
+                    />
+                  </div>
+                  {best.promo && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-600 truncate pr-2">🎉 {best.promo.name} · {promoLabel(best.promo)}</span>
+                      <span className="font-medium text-green-600">-฿{discount.toLocaleString()}</span>
                     </div>
                   )}
                   {zones.length > 0 && (
