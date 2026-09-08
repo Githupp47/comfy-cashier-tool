@@ -511,8 +511,14 @@ serve(async (req) => {
               const norm = (v: string) => v.replace(/\s/g, "").toLowerCase();
               const matched = zones.find((z: any) => norm(z.name) === norm(wanted))
                 ?? zones.find((z: any) => wanted && (norm(z.name).includes(norm(wanted)) || norm(wanted).includes(norm(z.name))));
-              const shippingFee = matched ? Number(matched.fee) || 0 : 0;
-              const total = itemsTotal + shippingFee;
+              const baseShipping = matched ? Number(matched.fee) || 0 : 0;
+
+              // โปรโมชั่น/ส่วนลด
+              const { data: promoRows } = await (supabase.from as any)("promotions")
+                .select("*").eq("is_active", true);
+              const picked = bestPromo(promoRows ?? [], itemsTotal, args.promo_code);
+              const shippingFee = picked.freeShipping ? 0 : baseShipping;
+              const total = Math.max(0, itemsTotal - picked.discount) + shippingFee;
 
               const { data: order, error: oErr } = await supabase
                 .from("orders")
@@ -525,6 +531,8 @@ serve(async (req) => {
                   total_amount: total,
                   shipping_fee: shippingFee,
                   shipping_zone: matched ? matched.name : (wanted || null),
+                  discount_amount: picked.discount,
+                  promotion_code: picked.promo?.code ?? picked.promo?.name ?? null,
                   status: "pending",
                 })
                 .select().single();
