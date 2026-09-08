@@ -161,6 +161,13 @@ export default function Checkout() {
       const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
       if (itemsErr) throw itemsErr;
 
+      // นับการใช้โปรโมชั่น
+      if (best.promo) {
+        await (supabase.from as any)("promotions")
+          .update({ used_count: Number(best.promo.used_count || 0) + 1 })
+          .eq("id", best.promo.id);
+      }
+
       // Auto-verify slip (fire-and-forget, bot approves if amount matches)
       const chatSession = localStorage.getItem("chat_session_id") || undefined;
       supabase.functions.invoke("verify-slip", {
