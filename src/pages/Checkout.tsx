@@ -12,7 +12,8 @@ import { useCart } from "@/contexts/CartContext";
 import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check, Sparkles, Plus, Minus } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck } from "lucide-react";
+import { Truck, Tag } from "lucide-react";
+import { pickBestPromo, promoLabel, type Promotion } from "@/lib/promotions";
 import qrFallback from "@/assets/qr-payment.jpg";
 
 type Topping = { id: string; name: string; price: number; stock_quantity: number; is_available: boolean };
@@ -29,6 +30,17 @@ export default function Checkout() {
   const [copied, setCopied] = useState(false);
   const [toppingQty, setToppingQty] = useState<Record<string, number>>({});
   const [zoneName, setZoneName] = useState<string>("");
+  const [promoCode, setPromoCode] = useState("");
+
+  const { data: promotions = [] } = useQuery({
+    queryKey: ["promotions-active"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("promotions")
+        .select("*").eq("is_active", true).order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as Promotion[];
+    },
+  });
 
   const { data: toppings = [] } = useQuery({
     queryKey: ["toppings"],
@@ -74,9 +86,14 @@ export default function Checkout() {
   const selectedZone = zones.find((z) => z.name === zoneName) || null;
   // คิดค่าส่งตามโซนเท่านั้น (ไม่มีเหมา) — ถ้าไม่มีโซน ให้แอดมินกรอกค่าส่งภายหลัง
   const baseShipping = Math.max(0, Number(selectedZone?.fee) || 0);
+  const best = useMemo(
+    () => pickBestPromo(promotions, subTotal, promoCode),
+    [promotions, subTotal, promoCode]
+  );
+  const discount = best.discount;
   const freeByThreshold = freeThreshold > 0 && subTotal >= freeThreshold;
-  const shippingFee = freeByThreshold ? 0 : baseShipping;
-  const grandTotal = subTotal + shippingFee;
+  const shippingFee = freeByThreshold || best.freeShipping ? 0 : baseShipping;
+  const grandTotal = Math.max(0, subTotal - discount) + shippingFee;
 
 
   const copyAccount = () => {
