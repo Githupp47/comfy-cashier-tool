@@ -12,7 +12,8 @@ import { useCart } from "@/contexts/CartContext";
 import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check, Sparkles, Plus, Minus } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck } from "lucide-react";
+import { Truck, Tag } from "lucide-react";
+import { pickBestPromo, promoLabel, type Promotion } from "@/lib/promotions";
 import qrFallback from "@/assets/qr-payment.jpg";
 
 type Topping = { id: string; name: string; price: number; stock_quantity: number; is_available: boolean };
@@ -29,6 +30,17 @@ export default function Checkout() {
   const [copied, setCopied] = useState(false);
   const [toppingQty, setToppingQty] = useState<Record<string, number>>({});
   const [zoneName, setZoneName] = useState<string>("");
+  const [promoCode, setPromoCode] = useState("");
+
+  const { data: promotions = [] } = useQuery({
+    queryKey: ["promotions-active"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("promotions")
+        .select("*").eq("is_active", true).order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as Promotion[];
+    },
+  });
 
   const { data: toppings = [] } = useQuery({
     queryKey: ["toppings"],
@@ -74,9 +86,14 @@ export default function Checkout() {
   const selectedZone = zones.find((z) => z.name === zoneName) || null;
   // คิดค่าส่งตามโซนเท่านั้น (ไม่มีเหมา) — ถ้าไม่มีโซน ให้แอดมินกรอกค่าส่งภายหลัง
   const baseShipping = Math.max(0, Number(selectedZone?.fee) || 0);
+  const best = useMemo(
+    () => pickBestPromo(promotions, subTotal, promoCode),
+    [promotions, subTotal, promoCode]
+  );
+  const discount = best.discount;
   const freeByThreshold = freeThreshold > 0 && subTotal >= freeThreshold;
-  const shippingFee = freeByThreshold ? 0 : baseShipping;
-  const grandTotal = subTotal + shippingFee;
+  const shippingFee = freeByThreshold || best.freeShipping ? 0 : baseShipping;
+  const grandTotal = Math.max(0, subTotal - discount) + shippingFee;
 
 
   const copyAccount = () => {
@@ -113,6 +130,8 @@ export default function Checkout() {
           total_amount: grandTotal,
           shipping_fee: shippingFee,
           shipping_zone: selectedZone?.name ?? null,
+          discount_amount: discount,
+          promotion_code: best.promo?.code ?? best.promo?.name ?? null,
           status: "pending",
         })
         .select()
@@ -141,6 +160,13 @@ export default function Checkout() {
       }
       const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
       if (itemsErr) throw itemsErr;
+
+      // นับการใช้โปรโมชั่น
+      if (best.promo) {
+        await (supabase.from as any)("promotions")
+          .update({ used_count: Number(best.promo.used_count || 0) + 1 })
+          .eq("id", best.promo.id);
+      }
 
       // Auto-verify slip (fire-and-forget, bot approves if amount matches)
       const chatSession = localStorage.getItem("chat_session_id") || undefined;
@@ -209,6 +235,21 @@ export default function Checkout() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">ท็อปปิ้ง</span>
                       <span className="font-medium">฿{toppingTotal.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 text-sm py-1">
+                    <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-3.5 w-3.5" /> โค้ดส่วนลด</span>
+                    <Input
+                      className="w-[190px] h-9 rounded-xl"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
+                      placeholder="กรอกโค้ด (ถ้ามี)"
+                    />
+                  </div>
+                  {best.promo && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-600 truncate pr-2">🎉 {best.promo.name} · {promoLabel(best.promo)}</span>
+                      <span className="font-medium text-green-600">-฿{discount.toLocaleString()}</span>
                     </div>
                   )}
                   {zones.length > 0 && (

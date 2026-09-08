@@ -39,9 +39,11 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 - ค่าส่งใช้ตัวเลขจากระบบเท่านั้น ห้ามคิดเอง แล้วบวกเข้ากับค่าสินค้าก่อนแจ้งยอดโอน
 - ถ้าโซนไม่ตรงกับที่มีในระบบ → บอกว่า "แอดมินจะเช็คค่าส่งให้แล้วแจ้งอีกทีนะคะ" และยังไม่ต้องให้โอน
 
+🎁 โปรโมชั่น: ก่อนแจ้งยอดโอนทุกครั้งให้เรียก get_active_promotions ถ้ามีโปรที่เข้าเงื่อนไขให้แจ้งลูกค้า (เช่น "มีโปรลด X บาทค่ะ") ถ้าโปรต้องใช้โค้ด ให้ถามว่ามีโค้ดไหม แล้วส่ง promo_code ตอน create_order ห้ามคิดส่วนลดเอง ใช้ยอดจากระบบเท่านั้น
+
 💸 การเงิน:
 - ❌ ห้ามส่งเลขบัญชี/QR ทันทีที่ทัก ต้องยืนยันเมนู จำนวน ท็อปปิ้ง ชื่อ เบอร์ ที่อยู่ + โซน และสร้างออเดอร์ก่อน
-- แจ้งยอดแบบนี้: ค่าสินค้า X + ค่าส่ง Y = รวม Z บาท แล้วค่อยให้ช่องทางโอน
+- แจ้งยอดแบบนี้: ค่าสินค้า X + ค่าส่ง Y − ส่วนลด D = รวม Z บาท แล้วค่อยให้ช่องทางโอน
 - ลูกค้าส่งสลิป → ขอบคุณ บอกว่ากำลังตรวจสอบให้ รอสักครู่นะคะ (ระบบตรวจอัตโนมัติ)
 
 📦 สถานะออเดอร์: ถ้าลูกค้าถามว่าของถึงไหน ให้เรียก get_order_status (ใช้เบอร์โทร เลขออเดอร์ หรือ session ปัจจุบัน) แล้วแจ้งเลขออเดอร์ + สถานะปัจจุบัน + เลขติดตาม (ถ้ามี) ห้ามตอบว่าไม่พบก่อนเรียกเครื่องมือ
@@ -69,6 +71,38 @@ async function pushMetaMessage(token: string, recipientId: string, text: string,
       message: { text },
     }),
   }).catch((e) => console.error(`${platform} push`, e));
+}
+
+function usablePromo(p: any, subTotal: number, now = new Date()) {
+  if (!p.is_active) return false;
+  if (p.starts_at && new Date(p.starts_at) > now) return false;
+  if (p.ends_at && new Date(p.ends_at) < now) return false;
+  if (p.usage_limit != null && Number(p.used_count) >= Number(p.usage_limit)) return false;
+  if (subTotal < Number(p.min_order_amount || 0)) return false;
+  return true;
+}
+
+function promoAmount(p: any, subTotal: number) {
+  let d = p.discount_type === "percent"
+    ? (subTotal * Number(p.discount_value || 0)) / 100
+    : Number(p.discount_value || 0);
+  if (p.discount_type === "percent" && p.max_discount) d = Math.min(d, Number(p.max_discount));
+  return Math.max(0, Math.min(Math.round(d * 100) / 100, subTotal));
+}
+
+function bestPromo(promos: any[], subTotal: number, code?: string) {
+  const typed = (code || "").trim().toLowerCase();
+  const cands = promos.filter((p) =>
+    usablePromo(p, subTotal) && (p.code ? typed && p.code.trim().toLowerCase() === typed : true)
+  );
+  let best: any = null, bestVal = -1;
+  for (const p of cands) {
+    const v = promoAmount(p, subTotal) + (p.free_shipping ? 0.01 : 0);
+    if (v > bestVal) { bestVal = v; best = p; }
+  }
+  return best
+    ? { promo: best, discount: promoAmount(best, subTotal), freeShipping: !!best.free_shipping }
+    : { promo: null, discount: 0, freeShipping: false };
 }
 
 const tools = [
@@ -128,6 +162,14 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "get_active_promotions",
+      description: "ดึงโปรโมชั่น/ส่วนลดที่ร้านเปิดใช้อยู่ ต้องเรียกก่อนแจ้งยอดที่ต้องโอนทุกครั้ง",
+      parameters: { type: "object", properties: { code: { type: "string", description: "โค้ดส่วนลดที่ลูกค้ากรอก (ถ้ามี)" } } },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_order_status",
       description: "เช็คสถานะออเดอร์ล่าสุดของลูกค้า ด้วยเบอร์โทรหรือเลขออเดอร์",
       parameters: {
@@ -152,6 +194,7 @@ const tools = [
           address: { type: "string", description: "ชื่อหอพัก/ที่อยู่จัดส่ง หรือลิงก์ Google Maps" },
           shipping_zone: { type: "string", description: "ชื่อโซนจัดส่งจาก get_shipping_zones เช่น หลังมอ / กังสดาล / ในเมือง" },
           note: { type: "string" },
+          promo_code: { type: "string", description: "โค้ดส่วนลดที่ลูกค้ากรอก (ถ้ามี)" },
 
           items: {
             type: "array",
@@ -362,6 +405,22 @@ serve(async (req) => {
             .select("id, name, price, stock_quantity, is_available")
             .eq("is_available", true);
           result = { toppings: tops ?? [] };
+        } else if (name === "get_active_promotions") {
+          const { data: promoRows } = await (supabase.from as any)("promotions")
+            .select("*").eq("is_active", true).order("sort_order");
+          result = {
+            promotions: (promoRows ?? []).map((p: any) => ({
+              name: p.name,
+              code: p.code,
+              discount_type: p.discount_type,
+              discount_value: Number(p.discount_value),
+              min_order_amount: Number(p.min_order_amount || 0),
+              max_discount: p.max_discount ? Number(p.max_discount) : null,
+              free_shipping: !!p.free_shipping,
+              description: p.description,
+            })),
+            note: "โปรที่มี code ต้องให้ลูกค้ากรอกโค้ดถึงใช้ได้ โปรที่ไม่มี code ใช้อัตโนมัติเมื่อถึงยอดขั้นต่ำ ระบบจะคิดส่วนลดจริงตอน create_order",
+          };
         } else if (name === "get_shipping_zones") {
           const { data: s } = await supabase
             .from("shop_settings").select("value").eq("key", "shipping_zones").maybeSingle();
@@ -470,8 +529,14 @@ serve(async (req) => {
               const norm = (v: string) => v.replace(/\s/g, "").toLowerCase();
               const matched = zones.find((z: any) => norm(z.name) === norm(wanted))
                 ?? zones.find((z: any) => wanted && (norm(z.name).includes(norm(wanted)) || norm(wanted).includes(norm(z.name))));
-              const shippingFee = matched ? Number(matched.fee) || 0 : 0;
-              const total = itemsTotal + shippingFee;
+              const baseShipping = matched ? Number(matched.fee) || 0 : 0;
+
+              // โปรโมชั่น/ส่วนลด
+              const { data: promoRows } = await (supabase.from as any)("promotions")
+                .select("*").eq("is_active", true);
+              const picked = bestPromo(promoRows ?? [], itemsTotal, args.promo_code);
+              const shippingFee = picked.freeShipping ? 0 : baseShipping;
+              const total = Math.max(0, itemsTotal - picked.discount) + shippingFee;
 
               const { data: order, error: oErr } = await supabase
                 .from("orders")
@@ -484,6 +549,8 @@ serve(async (req) => {
                   total_amount: total,
                   shipping_fee: shippingFee,
                   shipping_zone: matched ? matched.name : (wanted || null),
+                  discount_amount: picked.discount,
+                  promotion_code: picked.promo?.code ?? picked.promo?.name ?? null,
                   status: "pending",
                 })
                 .select().single();
@@ -512,11 +579,18 @@ serve(async (req) => {
                 }
               }
 
+              if (picked.promo) {
+                await (supabase.from as any)("promotions")
+                  .update({ used_count: Number(picked.promo.used_count || 0) + 1 })
+                  .eq("id", picked.promo.id);
+              }
+
               result = {
                 ok: true,
                 order_id: order.id,
                 short_id: order.id.slice(0, 8),
                 items_total_baht: itemsTotal,
+                promotion: picked.promo ? { name: picked.promo.name, discount_baht: picked.discount, free_shipping: picked.freeShipping } : null,
                 shipping_zone: matched ? matched.name : null,
                 shipping_fee: matched ? shippingFee : "โซนไม่ตรงระบบ — แจ้งลูกค้าว่าแอดมินจะเช็คค่าส่งให้ ห้ามเดาเอง",
                 grand_total_baht: matched ? total : null,
