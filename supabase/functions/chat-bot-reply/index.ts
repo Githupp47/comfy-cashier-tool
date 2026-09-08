@@ -128,6 +128,14 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "get_active_promotions",
+      description: "ดึงโปรโมชั่น/ส่วนลดที่ร้านเปิดใช้อยู่ ต้องเรียกก่อนแจ้งยอดที่ต้องโอนทุกครั้ง",
+      parameters: { type: "object", properties: { code: { type: "string", description: "โค้ดส่วนลดที่ลูกค้ากรอก (ถ้ามี)" } } },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_order_status",
       description: "เช็คสถานะออเดอร์ล่าสุดของลูกค้า ด้วยเบอร์โทรหรือเลขออเดอร์",
       parameters: {
