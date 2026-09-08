@@ -71,6 +71,38 @@ async function pushMetaMessage(token: string, recipientId: string, text: string,
   }).catch((e) => console.error(`${platform} push`, e));
 }
 
+function usablePromo(p: any, subTotal: number, now = new Date()) {
+  if (!p.is_active) return false;
+  if (p.starts_at && new Date(p.starts_at) > now) return false;
+  if (p.ends_at && new Date(p.ends_at) < now) return false;
+  if (p.usage_limit != null && Number(p.used_count) >= Number(p.usage_limit)) return false;
+  if (subTotal < Number(p.min_order_amount || 0)) return false;
+  return true;
+}
+
+function promoAmount(p: any, subTotal: number) {
+  let d = p.discount_type === "percent"
+    ? (subTotal * Number(p.discount_value || 0)) / 100
+    : Number(p.discount_value || 0);
+  if (p.discount_type === "percent" && p.max_discount) d = Math.min(d, Number(p.max_discount));
+  return Math.max(0, Math.min(Math.round(d * 100) / 100, subTotal));
+}
+
+function bestPromo(promos: any[], subTotal: number, code?: string) {
+  const typed = (code || "").trim().toLowerCase();
+  const cands = promos.filter((p) =>
+    usablePromo(p, subTotal) && (p.code ? typed && p.code.trim().toLowerCase() === typed : true)
+  );
+  let best: any = null, bestVal = -1;
+  for (const p of cands) {
+    const v = promoAmount(p, subTotal) + (p.free_shipping ? 0.01 : 0);
+    if (v > bestVal) { bestVal = v; best = p; }
+  }
+  return best
+    ? { promo: best, discount: promoAmount(best, subTotal), freeShipping: !!best.free_shipping }
+    : { promo: null, discount: 0, freeShipping: false };
+}
+
 const tools = [
   {
     type: "function",
@@ -160,6 +192,7 @@ const tools = [
           address: { type: "string", description: "ชื่อหอพัก/ที่อยู่จัดส่ง หรือลิงก์ Google Maps" },
           shipping_zone: { type: "string", description: "ชื่อโซนจัดส่งจาก get_shipping_zones เช่น หลังมอ / กังสดาล / ในเมือง" },
           note: { type: "string" },
+          promo_code: { type: "string", description: "โค้ดส่วนลดที่ลูกค้ากรอก (ถ้ามี)" },
 
           items: {
             type: "array",
