@@ -42,6 +42,28 @@ export default function Checkout() {
     },
   });
 
+  const custKey = customerKey(phone);
+
+  const { data: redemptions = [] } = useQuery({
+    queryKey: ["promo-redemptions", custKey],
+    enabled: custKey.length >= 9,
+    queryFn: async () => {
+      const { data } = await (supabase.from as any)("promotion_redemptions")
+        .select("promotion_id").eq("customer_key", custKey);
+      return (data ?? []) as { promotion_id: string }[];
+    },
+  });
+
+  const eligiblePromotions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of redemptions) counts[r.promotion_id] = (counts[r.promotion_id] ?? 0) + 1;
+    return promotions.filter((p) => {
+      const lim = p.per_customer_limit;
+      if (lim == null || lim <= 0) return true;
+      return (counts[p.id] ?? 0) < lim;
+    });
+  }, [promotions, redemptions]);
+
   const { data: toppings = [] } = useQuery({
     queryKey: ["toppings"],
     queryFn: async () => {
