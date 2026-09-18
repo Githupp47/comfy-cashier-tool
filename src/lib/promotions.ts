@@ -14,7 +14,19 @@ export type Promotion = {
   used_count: number;
   description: string | null;
   sort_order: number;
+  per_customer_limit?: number | null;
+  image_url?: string | null;
+  internal_note?: string | null;
+  is_test?: boolean;
 };
+
+/** ทำให้เบอร์โทร/ไอดีลูกค้าเป็นคีย์เดียวกันเสมอ */
+export function customerKey(phoneOrId?: string | null): string {
+  const v = (phoneOrId || "").trim().toLowerCase();
+  if (!v) return "";
+  if (v.includes(":")) return v; // line:xxx / instagram:xxx
+  return v.replace(/[^0-9]/g, "") || v;
+}
 
 export function isPromoUsable(p: Promotion, subTotal: number, now = new Date()): boolean {
   if (!p.is_active) return false;

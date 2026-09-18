@@ -13,7 +13,7 @@ import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check, Sparkles, Plus, M
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truck, Tag } from "lucide-react";
-import { pickBestPromo, promoLabel, type Promotion } from "@/lib/promotions";
+import { pickBestPromo, promoLabel, customerKey, type Promotion } from "@/lib/promotions";
 import qrFallback from "@/assets/qr-payment.jpg";
 
 type Topping = { id: string; name: string; price: number; stock_quantity: number; is_available: boolean };
@@ -41,6 +41,28 @@ export default function Checkout() {
       return (data ?? []) as Promotion[];
     },
   });
+
+  const custKey = customerKey(phone);
+
+  const { data: redemptions = [] } = useQuery({
+    queryKey: ["promo-redemptions", custKey],
+    enabled: custKey.length >= 9,
+    queryFn: async () => {
+      const { data } = await (supabase.from as any)("promotion_redemptions")
+        .select("promotion_id").eq("customer_key", custKey);
+      return (data ?? []) as { promotion_id: string }[];
+    },
+  });
+
+  const eligiblePromotions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of redemptions) counts[r.promotion_id] = (counts[r.promotion_id] ?? 0) + 1;
+    return promotions.filter((p) => {
+      const lim = p.per_customer_limit;
+      if (lim == null || lim <= 0) return true;
+      return (counts[p.id] ?? 0) < lim;
+    });
+  }, [promotions, redemptions]);
 
   const { data: toppings = [] } = useQuery({
     queryKey: ["toppings"],
@@ -87,7 +109,7 @@ export default function Checkout() {
   // คิดค่าส่งตามโซนเท่านั้น (ไม่มีเหมา) — ถ้าไม่มีโซน ให้แอดมินกรอกค่าส่งภายหลัง
   const baseShipping = Math.max(0, Number(selectedZone?.fee) || 0);
   const best = useMemo(
-    () => pickBestPromo(promotions, subTotal, promoCode),
+    () => pickBestPromo(eligiblePromotions, subTotal, promoCode),
     [promotions, subTotal, promoCode]
   );
   const discount = best.discount;
@@ -163,6 +185,14 @@ export default function Checkout() {
 
       // นับการใช้โปรโมชั่น
       if (best.promo) {
+        await (supabase.from as any)("promotion_redemptions").insert({
+          promotion_id: best.promo.id,
+          code: best.promo.code,
+          customer_key: custKey || phone.trim(),
+          customer_name: name.trim(),
+          order_id: order.id,
+          channel: "web",
+        });
         await (supabase.from as any)("promotions")
           .update({ used_count: Number(best.promo.used_count || 0) + 1 })
           .eq("id", best.promo.id);
@@ -251,6 +281,11 @@ export default function Checkout() {
                       <span className="text-green-600 truncate pr-2">🎉 {best.promo.name} · {promoLabel(best.promo)}</span>
                       <span className="font-medium text-green-600">-฿{discount.toLocaleString()}</span>
                     </div>
+                  )}
+                  {!best.promo && promoCode.trim() !== "" &&
+                    promotions.some((p) => p.code && p.code.trim().toLowerCase() === promoCode.trim().toLowerCase()) &&
+                    !eligiblePromotions.some((p) => p.code && p.code.trim().toLowerCase() === promoCode.trim().toLowerCase()) && (
+                    <p className="text-xs text-destructive">โค้ดนี้ใช้ได้จำกัดต่อคน — เบอร์นี้เคยใช้สิทธิ์แล้วค่ะ</p>
                   )}
                   {zones.length > 0 && (
                     <div className="flex items-center justify-between gap-2 text-sm pb-1">
