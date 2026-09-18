@@ -13,7 +13,7 @@ import { Trash2, ShoppingBag, CreditCard, Upload, Copy, Check, Sparkles, Plus, M
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truck, Tag } from "lucide-react";
-import { pickBestPromo, promoLabel, type Promotion } from "@/lib/promotions";
+import { pickBestPromo, promoLabel, customerKey, type Promotion } from "@/lib/promotions";
 import qrFallback from "@/assets/qr-payment.jpg";
 
 type Topping = { id: string; name: string; price: number; stock_quantity: number; is_available: boolean };
@@ -109,7 +109,7 @@ export default function Checkout() {
   // คิดค่าส่งตามโซนเท่านั้น (ไม่มีเหมา) — ถ้าไม่มีโซน ให้แอดมินกรอกค่าส่งภายหลัง
   const baseShipping = Math.max(0, Number(selectedZone?.fee) || 0);
   const best = useMemo(
-    () => pickBestPromo(promotions, subTotal, promoCode),
+    () => pickBestPromo(eligiblePromotions, subTotal, promoCode),
     [promotions, subTotal, promoCode]
   );
   const discount = best.discount;
@@ -185,6 +185,14 @@ export default function Checkout() {
 
       // นับการใช้โปรโมชั่น
       if (best.promo) {
+        await (supabase.from as any)("promotion_redemptions").insert({
+          promotion_id: best.promo.id,
+          code: best.promo.code,
+          customer_key: custKey || phone.trim(),
+          customer_name: name.trim(),
+          order_id: order.id,
+          channel: "web",
+        });
         await (supabase.from as any)("promotions")
           .update({ used_count: Number(best.promo.used_count || 0) + 1 })
           .eq("id", best.promo.id);
