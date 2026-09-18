@@ -313,6 +313,54 @@ export type Database = {
         }
         Relationships: []
       }
+      promotion_redemptions: {
+        Row: {
+          channel: string
+          code: string | null
+          created_at: string
+          customer_key: string
+          customer_name: string | null
+          id: string
+          order_id: string | null
+          promotion_id: string
+        }
+        Insert: {
+          channel?: string
+          code?: string | null
+          created_at?: string
+          customer_key: string
+          customer_name?: string | null
+          id?: string
+          order_id?: string | null
+          promotion_id: string
+        }
+        Update: {
+          channel?: string
+          code?: string | null
+          created_at?: string
+          customer_key?: string
+          customer_name?: string | null
+          id?: string
+          order_id?: string | null
+          promotion_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_redemptions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_redemptions_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       promotions: {
         Row: {
           code: string | null
@@ -323,10 +371,14 @@ export type Database = {
           ends_at: string | null
           free_shipping: boolean
           id: string
+          image_url: string | null
+          internal_note: string | null
           is_active: boolean
+          is_test: boolean
           max_discount: number | null
           min_order_amount: number
           name: string
+          per_customer_limit: number | null
           sort_order: number
           starts_at: string | null
           updated_at: string
@@ -342,10 +394,14 @@ export type Database = {
           ends_at?: string | null
           free_shipping?: boolean
           id?: string
+          image_url?: string | null
+          internal_note?: string | null
           is_active?: boolean
+          is_test?: boolean
           max_discount?: number | null
           min_order_amount?: number
           name: string
+          per_customer_limit?: number | null
           sort_order?: number
           starts_at?: string | null
           updated_at?: string
@@ -361,10 +417,14 @@ export type Database = {
           ends_at?: string | null
           free_shipping?: boolean
           id?: string
+          image_url?: string | null
+          internal_note?: string | null
           is_active?: boolean
+          is_test?: boolean
           max_discount?: number | null
           min_order_amount?: number
           name?: string
+          per_customer_limit?: number | null
           sort_order?: number
           starts_at?: string | null
           updated_at?: string
