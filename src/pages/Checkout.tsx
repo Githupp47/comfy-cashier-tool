@@ -282,6 +282,11 @@ export default function Checkout() {
                       <span className="font-medium text-green-600">-฿{discount.toLocaleString()}</span>
                     </div>
                   )}
+                  {!best.promo && promoCode.trim() !== "" &&
+                    promotions.some((p) => p.code && p.code.trim().toLowerCase() === promoCode.trim().toLowerCase()) &&
+                    !eligiblePromotions.some((p) => p.code && p.code.trim().toLowerCase() === promoCode.trim().toLowerCase()) && (
+                    <p className="text-xs text-destructive">โค้ดนี้ใช้ได้จำกัดต่อคน — เบอร์นี้เคยใช้สิทธิ์แล้วค่ะ</p>
+                  )}
                   {zones.length > 0 && (
                     <div className="flex items-center justify-between gap-2 text-sm pb-1">
                       <span className="text-muted-foreground flex items-center gap-1"><Truck className="h-3.5 w-3.5" /> โซนจัดส่ง *</span>
