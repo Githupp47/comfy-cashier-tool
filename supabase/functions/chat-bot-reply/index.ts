@@ -250,15 +250,37 @@ serve(async (req) => {
       });
     }
 
-    const { data: history } = await supabase
+    const { data: historyAll } = await supabase
       .from("chat_messages")
-      .select("sender_type, message, platform, line_user_id, attachment_url, attachment_type, customer_name, customer_phone, order_id")
+      .select("created_at, sender_type, message, platform, line_user_id, attachment_url, attachment_type, customer_name, customer_phone, order_id")
       .eq("session_id", session_id)
       .order("created_at", { ascending: false })
       .limit(40);
 
-    const reversed = (history ?? []).reverse();
-    const last = (history ?? []).find((m: any) => m.line_user_id);
+    const allDesc = historyAll ?? [];
+
+    // ── เริ่มบทสนทนาใหม่เมื่อเงียบนาน หรือออเดอร์เก่าปิดแล้ว (แต่ยังจำโปรไฟล์ลูกค้า)
+    const GAP_MS = 6 * 60 * 60 * 1000;
+    let cut = allDesc.length;
+    for (let i = 0; i < allDesc.length - 1; i++) {
+      const t1 = new Date(allDesc[i].created_at).getTime();
+      const t2 = new Date(allDesc[i + 1].created_at).getTime();
+      if (t1 - t2 > GAP_MS) { cut = i + 1; break; }
+    }
+    let windowDesc = allDesc.slice(0, cut);
+
+    const orderMsgIdx = windowDesc.findIndex((m: any) => m.order_id);
+    if (orderMsgIdx >= 0) {
+      const { data: prevOrder } = await supabase
+        .from("orders").select("status").eq("id", windowDesc[orderMsgIdx].order_id).maybeSingle();
+      if (prevOrder && ["delivered", "cancelled", "completed"].includes(String(prevOrder.status))) {
+        windowDesc = windowDesc.slice(0, orderMsgIdx); // ออเดอร์เก่าจบแล้ว → เริ่มรอบใหม่
+      }
+    }
+
+    const history = windowDesc;
+    const reversed = [...windowDesc].reverse();
+    const last = allDesc.find((m: any) => m.line_user_id);
     let platform: string = last?.platform ?? "web";
     let lineUserId: string | null = last?.line_user_id ?? null;
     for (const prefix of ["line:", "facebook:", "instagram:"]) {
