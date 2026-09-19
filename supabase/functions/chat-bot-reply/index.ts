@@ -456,7 +456,7 @@ serve(async (req) => {
           const { data: promoRows } = await (supabase.from as any)("promotions")
             .select("*").eq("is_active", true).order("sort_order");
           result = {
-            promotions: (promoRows ?? []).map((p: any) => ({
+            promotions: (promoRows ?? []).filter((p: any) => !p.is_test).map((p: any) => ({
               name: p.name,
               code: p.code,
               discount_type: p.discount_type,
@@ -465,8 +465,10 @@ serve(async (req) => {
               max_discount: p.max_discount ? Number(p.max_discount) : null,
               free_shipping: !!p.free_shipping,
               description: p.description,
+              per_customer_limit: p.per_customer_limit ?? null,
+              used_up_for_this_customer: !promoAllowed(p),
             })),
-            note: "โปรที่มี code ต้องให้ลูกค้ากรอกโค้ดถึงใช้ได้ โปรที่ไม่มี code ใช้อัตโนมัติเมื่อถึงยอดขั้นต่ำ ระบบจะคิดส่วนลดจริงตอน create_order",
+            note: "เสนอโปรฯ ให้ลูกค้าเองโดยไม่ต้องรอถาม โปรที่ used_up_for_this_customer = true ห้ามเสนอ โปรที่มี code ต้องให้ลูกค้ากรอกโค้ดถึงใช้ได้ โปรที่ไม่มี code ใช้อัตโนมัติเมื่อถึงยอดขั้นต่ำ ระบบจะคิดส่วนลดจริงตอน create_order",
           };
         } else if (name === "get_shipping_zones") {
           const { data: s } = await supabase
@@ -581,7 +583,18 @@ serve(async (req) => {
               // โปรโมชั่น/ส่วนลด
               const { data: promoRows } = await (supabase.from as any)("promotions")
                 .select("*").eq("is_active", true);
-              const picked = bestPromo(promoRows ?? [], itemsTotal, args.promo_code);
+              const orderKey = String(args.customer_phone || "").replace(/[^0-9]/g, "") || custKey;
+              const { data: orderRedeems } = await (supabase.from as any)("promotion_redemptions")
+                .select("promotion_id").eq("customer_key", orderKey);
+              const orderCounts: Record<string, number> = { ...redeemCounts };
+              for (const r of (orderRedeems ?? [])) orderCounts[r.promotion_id] = (orderCounts[r.promotion_id] ?? 0) + 1;
+              const eligiblePromos = (promoRows ?? []).filter((p: any) => {
+                if (p.is_test) return false;
+                const lim = p.per_customer_limit;
+                if (lim == null || Number(lim) <= 0) return true;
+                return (orderCounts[p.id] ?? 0) < Number(lim);
+              });
+              const picked = bestPromo(eligiblePromos, itemsTotal, args.promo_code);
               const shippingFee = picked.freeShipping ? 0 : baseShipping;
               const total = Math.max(0, itemsTotal - picked.discount) + shippingFee;
 
@@ -630,6 +643,14 @@ serve(async (req) => {
                 await (supabase.from as any)("promotions")
                   .update({ used_count: Number(picked.promo.used_count || 0) + 1 })
                   .eq("id", picked.promo.id);
+                await (supabase.from as any)("promotion_redemptions").insert({
+                  promotion_id: picked.promo.id,
+                  code: picked.promo.code,
+                  customer_key: orderKey,
+                  customer_name: args.customer_name,
+                  order_id: order.id,
+                  channel: platform,
+                });
               }
 
               result = {
