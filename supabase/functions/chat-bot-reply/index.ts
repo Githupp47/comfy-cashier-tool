@@ -39,7 +39,11 @@ const DEFAULT_PROMPT = `คุณคือ "พนักงานร้าน HA
 - ค่าส่งใช้ตัวเลขจากระบบเท่านั้น ห้ามคิดเอง แล้วบวกเข้ากับค่าสินค้าก่อนแจ้งยอดโอน
 - ถ้าโซนไม่ตรงกับที่มีในระบบ → บอกว่า "แอดมินจะเช็คค่าส่งให้แล้วแจ้งอีกทีนะคะ" และยังไม่ต้องให้โอน
 
-🎁 โปรโมชั่น: ก่อนแจ้งยอดโอนทุกครั้งให้เรียก get_active_promotions ถ้ามีโปรที่เข้าเงื่อนไขให้แจ้งลูกค้า (เช่น "มีโปรลด X บาทค่ะ") ถ้าโปรต้องใช้โค้ด ให้ถามว่ามีโค้ดไหม แล้วส่ง promo_code ตอน create_order ห้ามคิดส่วนลดเอง ใช้ยอดจากระบบเท่านั้น
+🎁 โปรโมชั่น (เชิงรุก — ลูกค้าไม่ต้องถาม):
+- เรียก get_active_promotions ทันทีที่ลูกค้าเริ่มเลือกเมนู และก่อนแจ้งยอดโอนทุกครั้ง
+- ถ้ามีโปรฯ ที่ลูกค้าใช้ได้ ให้เสนอเองเลย เช่น "ตอนนี้มีโปรลด X ค่ะ" หรือ "เพิ่มอีก Y บาทได้ส่วนลดนะคะ 😊"
+- โปรที่ระบบบอกว่า used_up_for_this_customer = true ห้ามเสนอ ถ้าลูกค้ากรอกโค้ดนั้นให้บอกสุภาพว่า "โค้ดนี้ใช้ได้จำกัดต่อคน คุณลูกค้าเคยใช้สิทธิ์แล้วค่ะ 🙏"
+- โปรที่ต้องใช้โค้ด ให้ถามว่ามีโค้ดไหม แล้วส่ง promo_code ตอน create_order ห้ามคิดส่วนลดเอง ใช้ยอดจากระบบเท่านั้น
 
 💸 การเงิน:
 - ❌ ห้ามส่งเลขบัญชี/QR ทันทีที่ทัก ต้องยืนยันเมนู จำนวน ท็อปปิ้ง ชื่อ เบอร์ ที่อยู่ + โซน และสร้างออเดอร์ก่อน
@@ -250,15 +254,37 @@ serve(async (req) => {
       });
     }
 
-    const { data: history } = await supabase
+    const { data: historyAll } = await supabase
       .from("chat_messages")
-      .select("sender_type, message, platform, line_user_id, attachment_url, attachment_type, customer_name, customer_phone, order_id")
+      .select("created_at, sender_type, message, platform, line_user_id, attachment_url, attachment_type, customer_name, customer_phone, order_id")
       .eq("session_id", session_id)
       .order("created_at", { ascending: false })
       .limit(40);
 
-    const reversed = (history ?? []).reverse();
-    const last = (history ?? []).find((m: any) => m.line_user_id);
+    const allDesc = historyAll ?? [];
+
+    // ── เริ่มบทสนทนาใหม่เมื่อเงียบนาน หรือออเดอร์เก่าปิดแล้ว (แต่ยังจำโปรไฟล์ลูกค้า)
+    const GAP_MS = 6 * 60 * 60 * 1000;
+    let cut = allDesc.length;
+    for (let i = 0; i < allDesc.length - 1; i++) {
+      const t1 = new Date(allDesc[i].created_at).getTime();
+      const t2 = new Date(allDesc[i + 1].created_at).getTime();
+      if (t1 - t2 > GAP_MS) { cut = i + 1; break; }
+    }
+    let windowDesc = allDesc.slice(0, cut);
+
+    const orderMsgIdx = windowDesc.findIndex((m: any) => m.order_id);
+    if (orderMsgIdx >= 0) {
+      const { data: prevOrder } = await supabase
+        .from("orders").select("status").eq("id", windowDesc[orderMsgIdx].order_id).maybeSingle();
+      if (prevOrder && ["delivered", "cancelled", "completed"].includes(String(prevOrder.status))) {
+        windowDesc = windowDesc.slice(0, orderMsgIdx); // ออเดอร์เก่าจบแล้ว → เริ่มรอบใหม่
+      }
+    }
+
+    const history = windowDesc;
+    const reversed = [...windowDesc].reverse();
+    const last = allDesc.find((m: any) => m.line_user_id);
     let platform: string = last?.platform ?? "web";
     let lineUserId: string | null = last?.line_user_id ?? null;
     for (const prefix of ["line:", "facebook:", "instagram:"]) {
@@ -270,8 +296,10 @@ serve(async (req) => {
     }
 
     // Build messages with multimodal user content
-    const knownProfile = (history ?? []).find((m: any) => m.customer_name || m.customer_phone);
-    const linkedMessage = (history ?? []).find((m: any) => m.order_id);
+    // โปรไฟล์ลูกค้าจำจากทั้งประวัติ (แม้เริ่มบทสนทนาใหม่)
+    const knownProfile = allDesc.find((m: any) => m.customer_name || m.customer_phone);
+    const linkedMessage = history.find((m: any) => m.order_id);
+    const isReturning = windowDesc.length < allDesc.length && !!knownProfile;
     let linkedOrder: any = null;
     if (linkedMessage?.order_id) {
       const { data } = await supabase
@@ -281,6 +309,22 @@ serve(async (req) => {
         .maybeSingle();
       linkedOrder = data;
     }
+
+    // คีย์ลูกค้า สำหรับเช็คสิทธิ์โปรฯ ต่อคน
+    const rawKey = (linkedOrder?.customer_phone || knownProfile?.customer_phone || "").trim();
+    const custKey = rawKey ? (rawKey.replace(/[^0-9]/g, "") || rawKey.toLowerCase()) : session_id.toLowerCase();
+
+    const { data: redemptionRows } = await (supabase.from as any)("promotion_redemptions")
+      .select("promotion_id").eq("customer_key", custKey);
+    const redeemCounts: Record<string, number> = {};
+    for (const r of (redemptionRows ?? [])) redeemCounts[r.promotion_id] = (redeemCounts[r.promotion_id] ?? 0) + 1;
+    const promoAllowed = (p: any) => {
+      if (p.is_test) return false;
+      const lim = p.per_customer_limit;
+      if (lim == null || Number(lim) <= 0) return true;
+      return (redeemCounts[p.id] ?? 0) < Number(lim);
+    };
+
     const knownContext = [
       "ข้อมูลที่ระบบพบแล้ว (ห้ามถามซ้ำ):",
       `• ชื่อ: ${linkedOrder?.customer_name || knownProfile?.customer_name || "ยังไม่มี"}`,
@@ -288,7 +332,10 @@ serve(async (req) => {
       `• ที่อยู่/หอพัก/แมพ: ${linkedOrder?.dormitory_map_link || "ตรวจจากข้อความก่อนหน้า หากลูกค้าเคยบอกแล้วให้ใช้ข้อมูลนั้น"}`,
       `• โซน: ${linkedOrder?.shipping_zone || "ตรวจจากข้อความก่อนหน้า หากลูกค้าเคยบอกแล้วให้ใช้ข้อมูลนั้น"}`,
       `• ออเดอร์ที่ผูกกับแชท: ${linkedOrder ? `#${linkedOrder.id.slice(0, 8)} (${linkedOrder.status})` : "ยังไม่มี"}`,
-    ].join("\n");
+      isReturning
+        ? "• นี่คือ 'รอบสั่งใหม่' ของลูกค้าเก่า: ทักทายแบบจำลูกค้าได้ ใช้ชื่อ/เบอร์/ที่อยู่เดิม แต่ห้ามอ้างอิงรายการหรือยอดของออเดอร์เก่า เริ่มรับออเดอร์ใหม่ตั้งแต่เมนู"
+        : "",
+    ].filter(Boolean).join("\n");
     const systemPrompt = (settings.system_prompt || DEFAULT_PROMPT) + "\n\n" + DEFAULT_PROMPT + "\n\n" + knownContext;
     const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
     for (const m of reversed) {
@@ -409,7 +456,7 @@ serve(async (req) => {
           const { data: promoRows } = await (supabase.from as any)("promotions")
             .select("*").eq("is_active", true).order("sort_order");
           result = {
-            promotions: (promoRows ?? []).map((p: any) => ({
+            promotions: (promoRows ?? []).filter((p: any) => !p.is_test).map((p: any) => ({
               name: p.name,
               code: p.code,
               discount_type: p.discount_type,
@@ -418,8 +465,10 @@ serve(async (req) => {
               max_discount: p.max_discount ? Number(p.max_discount) : null,
               free_shipping: !!p.free_shipping,
               description: p.description,
+              per_customer_limit: p.per_customer_limit ?? null,
+              used_up_for_this_customer: !promoAllowed(p),
             })),
-            note: "โปรที่มี code ต้องให้ลูกค้ากรอกโค้ดถึงใช้ได้ โปรที่ไม่มี code ใช้อัตโนมัติเมื่อถึงยอดขั้นต่ำ ระบบจะคิดส่วนลดจริงตอน create_order",
+            note: "เสนอโปรฯ ให้ลูกค้าเองโดยไม่ต้องรอถาม โปรที่ used_up_for_this_customer = true ห้ามเสนอ โปรที่มี code ต้องให้ลูกค้ากรอกโค้ดถึงใช้ได้ โปรที่ไม่มี code ใช้อัตโนมัติเมื่อถึงยอดขั้นต่ำ ระบบจะคิดส่วนลดจริงตอน create_order",
           };
         } else if (name === "get_shipping_zones") {
           const { data: s } = await supabase
@@ -534,7 +583,18 @@ serve(async (req) => {
               // โปรโมชั่น/ส่วนลด
               const { data: promoRows } = await (supabase.from as any)("promotions")
                 .select("*").eq("is_active", true);
-              const picked = bestPromo(promoRows ?? [], itemsTotal, args.promo_code);
+              const orderKey = String(args.customer_phone || "").replace(/[^0-9]/g, "") || custKey;
+              const { data: orderRedeems } = await (supabase.from as any)("promotion_redemptions")
+                .select("promotion_id").eq("customer_key", orderKey);
+              const orderCounts: Record<string, number> = { ...redeemCounts };
+              for (const r of (orderRedeems ?? [])) orderCounts[r.promotion_id] = (orderCounts[r.promotion_id] ?? 0) + 1;
+              const eligiblePromos = (promoRows ?? []).filter((p: any) => {
+                if (p.is_test) return false;
+                const lim = p.per_customer_limit;
+                if (lim == null || Number(lim) <= 0) return true;
+                return (orderCounts[p.id] ?? 0) < Number(lim);
+              });
+              const picked = bestPromo(eligiblePromos, itemsTotal, args.promo_code);
               const shippingFee = picked.freeShipping ? 0 : baseShipping;
               const total = Math.max(0, itemsTotal - picked.discount) + shippingFee;
 
@@ -583,6 +643,14 @@ serve(async (req) => {
                 await (supabase.from as any)("promotions")
                   .update({ used_count: Number(picked.promo.used_count || 0) + 1 })
                   .eq("id", picked.promo.id);
+                await (supabase.from as any)("promotion_redemptions").insert({
+                  promotion_id: picked.promo.id,
+                  code: picked.promo.code,
+                  customer_key: orderKey,
+                  customer_name: args.customer_name,
+                  order_id: order.id,
+                  channel: platform,
+                });
               }
 
               result = {
