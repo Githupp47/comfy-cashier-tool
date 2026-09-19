@@ -292,8 +292,10 @@ serve(async (req) => {
     }
 
     // Build messages with multimodal user content
-    const knownProfile = (history ?? []).find((m: any) => m.customer_name || m.customer_phone);
-    const linkedMessage = (history ?? []).find((m: any) => m.order_id);
+    // โปรไฟล์ลูกค้าจำจากทั้งประวัติ (แม้เริ่มบทสนทนาใหม่)
+    const knownProfile = allDesc.find((m: any) => m.customer_name || m.customer_phone);
+    const linkedMessage = history.find((m: any) => m.order_id);
+    const isReturning = windowDesc.length < allDesc.length && !!knownProfile;
     let linkedOrder: any = null;
     if (linkedMessage?.order_id) {
       const { data } = await supabase
@@ -303,6 +305,22 @@ serve(async (req) => {
         .maybeSingle();
       linkedOrder = data;
     }
+
+    // คีย์ลูกค้า สำหรับเช็คสิทธิ์โปรฯ ต่อคน
+    const rawKey = (linkedOrder?.customer_phone || knownProfile?.customer_phone || "").trim();
+    const custKey = rawKey ? (rawKey.replace(/[^0-9]/g, "") || rawKey.toLowerCase()) : session_id.toLowerCase();
+
+    const { data: redemptionRows } = await (supabase.from as any)("promotion_redemptions")
+      .select("promotion_id").eq("customer_key", custKey);
+    const redeemCounts: Record<string, number> = {};
+    for (const r of (redemptionRows ?? [])) redeemCounts[r.promotion_id] = (redeemCounts[r.promotion_id] ?? 0) + 1;
+    const promoAllowed = (p: any) => {
+      if (p.is_test) return false;
+      const lim = p.per_customer_limit;
+      if (lim == null || Number(lim) <= 0) return true;
+      return (redeemCounts[p.id] ?? 0) < Number(lim);
+    };
+
     const knownContext = [
       "ข้อมูลที่ระบบพบแล้ว (ห้ามถามซ้ำ):",
       `• ชื่อ: ${linkedOrder?.customer_name || knownProfile?.customer_name || "ยังไม่มี"}`,
@@ -310,7 +328,10 @@ serve(async (req) => {
       `• ที่อยู่/หอพัก/แมพ: ${linkedOrder?.dormitory_map_link || "ตรวจจากข้อความก่อนหน้า หากลูกค้าเคยบอกแล้วให้ใช้ข้อมูลนั้น"}`,
       `• โซน: ${linkedOrder?.shipping_zone || "ตรวจจากข้อความก่อนหน้า หากลูกค้าเคยบอกแล้วให้ใช้ข้อมูลนั้น"}`,
       `• ออเดอร์ที่ผูกกับแชท: ${linkedOrder ? `#${linkedOrder.id.slice(0, 8)} (${linkedOrder.status})` : "ยังไม่มี"}`,
-    ].join("\n");
+      isReturning
+        ? "• นี่คือ 'รอบสั่งใหม่' ของลูกค้าเก่า: ทักทายแบบจำลูกค้าได้ ใช้ชื่อ/เบอร์/ที่อยู่เดิม แต่ห้ามอ้างอิงรายการหรือยอดของออเดอร์เก่า เริ่มรับออเดอร์ใหม่ตั้งแต่เมนู"
+        : "",
+    ].filter(Boolean).join("\n");
     const systemPrompt = (settings.system_prompt || DEFAULT_PROMPT) + "\n\n" + DEFAULT_PROMPT + "\n\n" + knownContext;
     const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
     for (const m of reversed) {
