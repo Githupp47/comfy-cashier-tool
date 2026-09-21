@@ -196,7 +196,7 @@ export function PromotionsManager() {
       starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       usage_limit: form.usage_limit === "" ? null : Number(form.usage_limit),
-      per_customer_limit: form.per_customer_limit === "" || form.per_customer_limit === "0" ? null : Number(form.per_customer_limit),
+      per_customer_limit: ["", "0", "none"].includes(String(form.per_customer_limit)) ? null : Number(form.per_customer_limit),
       description: form.description.trim() || null,
       internal_note: form.internal_note.trim() || null,
       is_test: !!form.is_test,
