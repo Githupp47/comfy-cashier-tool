@@ -127,7 +127,14 @@ function BroadcastDialog({ promo, onClose }: { promo: Promotion | null; onClose:
           ) : (
             <p className="text-xs text-destructive">⚠️ จะส่งหาเพื่อนไลน์ของร้านทั้งหมด</p>
           )}
+          <Button variant="outline" size="sm" className="rounded-xl w-full" onClick={checkLine} disabled={busy}>
+            ตรวจการเชื่อมต่อไลน์
+          </Button>
+          {status && (
+            <p className="text-xs rounded-xl bg-muted p-3 whitespace-pre-wrap break-words">{status}</p>
+          )}
         </div>
+
         <DialogFooter>
           <Button variant="outline" className="rounded-xl" onClick={onClose}>ยกเลิก</Button>
           <Button className="rounded-xl gap-2" onClick={send} disabled={busy}>
