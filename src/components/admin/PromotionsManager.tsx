@@ -325,7 +325,7 @@ export function PromotionsManager() {
                   <SelectItem value="1">1 ครั้ง/คน</SelectItem>
                   <SelectItem value="2">2 ครั้ง/คน</SelectItem>
                   <SelectItem value="3">3 ครั้ง/คน</SelectItem>
-                  <SelectItem value="">ไม่จำกัด</SelectItem>
+                  <SelectItem value="none">ไม่จำกัด</SelectItem>
                 </SelectContent>
               </Select>
             </div>
