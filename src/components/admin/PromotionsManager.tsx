@@ -38,6 +38,7 @@ function BroadcastDialog({ promo, onClose }: { promo: Promotion | null; onClose:
   const [testUserId, setTestUserId] = useState("");
   const [busy, setBusy] = useState(false);
   const [writing, setWriting] = useState(false);
+  const [status, setStatus] = useState<string>("");
 
   const writeCaption = async () => {
     if (!promo) return;
@@ -50,10 +51,27 @@ function BroadcastDialog({ promo, onClose }: { promo: Promotion | null; onClose:
     setText(data.caption ?? "");
   };
 
+  const checkLine = async () => {
+    setBusy(true);
+    setStatus("");
+    const { data, error } = await supabase.functions.invoke("line-broadcast", { body: { diagnose: true } });
+    setBusy(false);
+    if (error || data?.error) return toast.error(data?.error ?? error!.message);
+    if (!data.token_valid) {
+      setStatus("❌ โทเคนไลน์ใช้ไม่ได้ — ออก Channel access token ใหม่แล้วบันทึกในแท็บเชื่อมต่อแชท");
+      return;
+    }
+    const q = data.quota ?? {};
+    setStatus(
+      `✅ เชื่อมไลน์ได้: ${data.bot_info?.displayName ?? "OA"} · โควตาส่ง: ${q.type === "none" ? "ไม่จำกัด" : (q.value ?? "-")} · เพื่อนที่เคยทักแชท: ${data.known_chat_users} คน`,
+    );
+  };
+
   const send = async () => {
     if (!text.trim()) return toast.error("ใส่ข้อความก่อนนะคะ");
     if (testMode && !testUserId.trim()) return toast.error("โหมดทดสอบต้องใส่ LINE User ID ผู้รับ");
     setBusy(true);
+    setStatus("");
     const { data, error } = await supabase.functions.invoke("line-broadcast", {
       body: {
         message: text,
@@ -63,10 +81,22 @@ function BroadcastDialog({ promo, onClose }: { promo: Promotion | null; onClose:
       },
     });
     setBusy(false);
-    if (error || data?.error) return toast.error(data?.error ?? error!.message);
-    toast.success(testMode ? "ส่งข้อความทดสอบแล้ว" : "ยิงโปรฯ เข้าไลน์เพื่อนทั้งหมดแล้ว 🎉");
-    onClose();
+    if (error || data?.error) {
+      const msg = data?.error ?? error!.message;
+      setStatus(`❌ ${msg}`);
+      return toast.error(msg);
+    }
+    if (data.note) setStatus(`✅ ${data.note}`);
+    toast.success(
+      testMode
+        ? "ส่งข้อความทดสอบแล้ว"
+        : data.mode === "multicast"
+        ? `ส่งโปรฯ ถึงเพื่อนไลน์ ${data.sent} คนแล้ว 🎉`
+        : "ยิงโปรฯ เข้าไลน์เพื่อนทั้งหมดแล้ว 🎉",
+    );
+    if (!data.note) onClose();
   };
+
 
   return (
     <Dialog open={!!promo} onOpenChange={(o) => !o && onClose()}>
