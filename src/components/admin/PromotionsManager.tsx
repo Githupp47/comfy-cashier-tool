@@ -196,7 +196,7 @@ export function PromotionsManager() {
       starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       usage_limit: form.usage_limit === "" ? null : Number(form.usage_limit),
-      per_customer_limit: form.per_customer_limit === "" || form.per_customer_limit === "0" ? null : Number(form.per_customer_limit),
+      per_customer_limit: ["", "0", "none"].includes(String(form.per_customer_limit)) ? null : Number(form.per_customer_limit),
       description: form.description.trim() || null,
       internal_note: form.internal_note.trim() || null,
       is_test: !!form.is_test,
@@ -228,7 +228,7 @@ export function PromotionsManager() {
       starts_at: p.starts_at ? p.starts_at.slice(0, 16) : "",
       ends_at: p.ends_at ? p.ends_at.slice(0, 16) : "",
       usage_limit: p.usage_limit == null ? "" : p.usage_limit,
-      per_customer_limit: p.per_customer_limit == null ? "" : String(p.per_customer_limit),
+      per_customer_limit: p.per_customer_limit == null ? "none" : String(p.per_customer_limit),
       description: p.description ?? "",
       internal_note: p.internal_note ?? "",
       is_test: !!p.is_test,
@@ -325,7 +325,7 @@ export function PromotionsManager() {
                   <SelectItem value="1">1 ครั้ง/คน</SelectItem>
                   <SelectItem value="2">2 ครั้ง/คน</SelectItem>
                   <SelectItem value="3">3 ครั้ง/คน</SelectItem>
-                  <SelectItem value="">ไม่จำกัด</SelectItem>
+                  <SelectItem value="none">ไม่จำกัด</SelectItem>
                 </SelectContent>
               </Select>
             </div>
