@@ -146,6 +146,114 @@ function BroadcastDialog({ promo, onClose }: { promo: Promotion | null; onClose:
   );
 }
 
+function FreeBroadcastCard() {
+  const [text, setText] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [testMode, setTestMode] = useState(true);
+  const [testUserId, setTestUserId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [status, setStatus] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const uploadImage = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `promos/broadcast-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("product-images").upload(path, file, { upsert: true });
+    if (error) { setUploading(false); return toast.error(error.message); }
+    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+    setImageUrl(data.publicUrl);
+    setUploading(false);
+    toast.success("อัปโหลดรูปแล้ว");
+  };
+
+  const send = async () => {
+    if (!text.trim()) return toast.error("พิมพ์แคปชั่นก่อนนะคะ");
+    if (testMode && !testUserId.trim()) return toast.error("โหมดทดสอบต้องใส่ LINE User ID ผู้รับ");
+    setBusy(true);
+    setStatus("");
+    const { data, error } = await supabase.functions.invoke("line-broadcast", {
+      body: {
+        message: text,
+        image_url: imageUrl || null,
+        test_mode: testMode,
+        test_user_id: testUserId.trim(),
+      },
+    });
+    setBusy(false);
+    if (error || data?.error) {
+      const msg = data?.error ?? error!.message;
+      setStatus(`❌ ${msg}`);
+      return toast.error(msg);
+    }
+    if (data.note) setStatus(`✅ ${data.note}`);
+    toast.success(
+      testMode
+        ? "ส่งข้อความทดสอบแล้ว"
+        : data.mode === "multicast"
+        ? `ส่งถึงเพื่อนไลน์ ${data.sent} คนแล้ว 🎉`
+        : "ส่งหาเพื่อนไลน์ทั้งหมดแล้ว 🎉",
+    );
+    if (!data.note) { setText(""); setImageUrl(""); }
+  };
+
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Send className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold">เขียนแคปชั่นชวนซื้อ ส่งหาเพื่อนไลน์ทั้งหมด</p>
+        </div>
+        <Textarea
+          rows={4}
+          className="rounded-xl bg-background"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="พิมพ์แคปชั่นชวนซื้อเองที่นี่ เช่น สุดสัปดาห์นี้ข้าวไอติมลดพิเศษ 🍦 ทักมาสั่งได้เลยน้า"
+        />
+        <div className="flex items-center gap-3">
+          {imageUrl && (
+            <img src={imageUrl} alt="แนบรูป" className="h-16 w-16 rounded-xl object-cover border border-border" />
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.currentTarget.value = ""; }}
+          />
+          <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => fileRef.current?.click()} disabled={uploading}>
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />} แนบรูป (ไม่บังคับ)
+          </Button>
+          {imageUrl && (
+            <Button variant="ghost" size="sm" className="rounded-xl text-destructive gap-1" onClick={() => setImageUrl("")}>
+              <Trash2 className="h-4 w-4" /> ลบรูป
+            </Button>
+          )}
+        </div>
+        <div className="flex items-center justify-between rounded-xl bg-background/70 p-3">
+          <div>
+            <Label className="text-sm">โหมดทดสอบระบบ</Label>
+            <p className="text-xs text-muted-foreground">ส่งหาไลน์ไอดีที่ระบุเท่านั้น ไม่ถึงลูกค้าจริง</p>
+          </div>
+          <Switch checked={testMode} onCheckedChange={setTestMode} />
+        </div>
+        {testMode ? (
+          <Input className="rounded-xl bg-background" value={testUserId} onChange={(e) => setTestUserId(e.target.value)} placeholder="LINE User ID ของคุณ (Uxxxxxxxx...)" />
+        ) : (
+          <p className="text-xs text-destructive">⚠️ จะส่งหาเพื่อนไลน์ของร้านทั้งหมด (นับโควตาข้อความไลน์)</p>
+        )}
+        {status && <p className="text-xs rounded-xl bg-muted p-3 whitespace-pre-wrap break-words">{status}</p>}
+        <Button className="w-full rounded-xl h-11 gap-2" onClick={send} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {testMode ? "ส่งทดสอบ" : "ส่งหาเพื่อนไลน์ทั้งหมด"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function RedemptionsDialog({ promo, onClose }: { promo: Promotion | null; onClose: () => void }) {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["promo-redemptions-admin", promo?.id],
@@ -299,6 +407,8 @@ export function PromotionsManager() {
         </h2>
         <p className="text-sm text-muted-foreground">ตั้งส่วนลดที่นี่ ระบบหน้าเว็บและบอทจะคิดส่วนลดและแนะนำโปรฯ ให้ลูกค้าอัตโนมัติ</p>
       </div>
+
+      <FreeBroadcastCard />
 
       <Card className="border-border">
         <CardContent className="p-5 space-y-4">
